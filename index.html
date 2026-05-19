@@ -5,32 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>CommsControl - ระบบเบิกคืนวิทยุ</title>
     
-    <!-- PWA Settings -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#060913">
     <link rel="apple-touch-icon" href="icon-192.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- React & Babel -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide-react@0.344.0/dist/umd/lucide-react.min.js"></script>
 </head>
 <body class="bg-[#060913]">
     <div id="root"></div>
 
     <script type="text/babel">
-        // 1. ดึง React Hooks ออกมาใช้งาน (สำหรับการรันผ่าน CDN)
+        // 1. ดึง React Hooks ออกมาใช้งาน 
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // 2. ดึง Icons จาก Lucide
+        // 2. ดึง Icons จาก lucideReact (แก้ไขจาก lucide)
         const { 
           Radio, Users, ArrowRightLeft, LayoutDashboard, 
           Search, Plus, CheckCircle2, XCircle, Wrench, 
@@ -38,13 +34,12 @@
           Database, Download, Upload, FileText, FileJson,
           Sun, Moon, MapPin, CheckSquare, Square, MessageSquareWarning, ChevronRight,
           Sparkles, Activity, TrendingUp, Zap, FileBarChart, CalendarDays, UserPlus, RefreshCw
-        } = lucide;
+        } = lucideReact;
 
         // --- Configuration ---
-        // ⚠️ ใส่ URL ของ Google Apps Script Web App ที่ได้จากขั้นตอน Deploy ที่นี่
         const GAS_URL = 'https://script.google.com/macros/s/AKfycbx6x2YG9ikeoZUK5DUI9QJ4A8FmqtkNYjDnQMTmSZQg3HWx2d8CIk5gC5pYbHqq88YE/exec'; 
 
-        // --- Mock Data (ข้อมูลจำลองกรณีไม่มี GAS_URL) ---
+        // --- Mock Data ---
         const mockDevices = [
           { id: 'R-001', model: 'Motorola CP200d', serial: 'S/N-9901', status: 'available' },
           { id: 'R-002', model: 'Motorola CP200d', serial: 'S/N-9902', status: 'borrowed', assignedTo: 'EMP-001' },
@@ -68,7 +63,6 @@
           const [currentView, setCurrentView] = useState('dashboard');
           const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
           
-          // Application State
           const [devices, setDevices] = useState(mockDevices);
           const [employees, setEmployees] = useState(mockEmployees);
           const [transactions, setTransactions] = useState(mockTransactions);
@@ -76,7 +70,6 @@
           const [isSyncing, setIsSyncing] = useState(false);
           const [theme, setTheme] = useState('dark'); 
 
-          // Stats
           const stats = useMemo(() => {
             return {
               total: devices.length,
@@ -88,7 +81,6 @@
 
           const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
-          // --- API Functions (เชื่อมต่อ GAS) ---
           const fetchData = async () => {
             if (!GAS_URL) return;
             setIsLoading(true);
@@ -98,7 +90,6 @@
               if (data.devices) setDevices(data.devices);
               if (data.employees) setEmployees(data.employees);
               if (data.transactions) setTransactions(data.transactions);
-              console.log("Data loaded from GAS");
             } catch (error) {
               console.error("Error fetching data:", error);
             } finally {
@@ -110,7 +101,6 @@
             if (!GAS_URL) return;
             setIsSyncing(true);
             try {
-              // ใช้ Content-Type: text/plain เพื่อหลีกเลี่ยงปัญหา CORS Preflight กับ GAS
               await fetch(GAS_URL, {
                 method: 'POST',
                 body: JSON.stringify(payload),
@@ -127,7 +117,6 @@
             fetchData();
           }, []);
 
-          // --- Handlers ---
           const handleBorrowReturn = (deviceIds, employeeId, type, note, location) => {
             const timestamp = new Date().toISOString();
             
@@ -156,7 +145,6 @@
             });
             setDevices(updatedDevices);
 
-            // Sync to backend
             syncToGAS({
               action: 'transaction',
               newTransactions,
@@ -201,7 +189,6 @@
             syncToGAS({ action: 'addEmployee', newEmployee });
           };
 
-          // --- Navigation Component ---
           const NavItem = ({ id, icon: Icon, label }) => {
             const isActive = currentView === id;
             return (
@@ -234,11 +221,9 @@
           return (
             <div className={`min-h-screen flex flex-col md:flex-row font-sans transition-colors duration-700 selection:bg-indigo-500/30 overflow-hidden ${bgStyle} ${theme === 'dark' ? 'text-slate-100' : 'text-slate-800'}`}>
               
-              {/* Background Decorative Blobs */}
               <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-600/20 blur-[120px] pointer-events-none" />
               <div className="fixed bottom-[-10%] right-[-5%] w-[30%] h-[40%] rounded-full bg-purple-600/20 blur-[120px] pointer-events-none" />
 
-              {/* Mobile Header */}
               <div className={`md:hidden px-6 py-4 flex justify-between items-center sticky top-0 z-40 backdrop-blur-2xl border-b ${theme === 'dark' ? 'bg-slate-900/60 border-white/5' : 'bg-white/60 border-slate-200/50'}`}>
                 <div className="flex items-center space-x-3">
                   <div className="p-2.5 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl shadow-lg shadow-indigo-500/30 text-white">
@@ -251,7 +236,6 @@
                 </button>
               </div>
 
-              {/* Floating Sidebar Navigation */}
               <aside className={`
                 fixed md:relative top-0 left-0 z-30 h-screen md:h-[calc(100vh-2rem)] md:m-4 w-72 flex-shrink-0 flex flex-col rounded-none md:rounded-[2rem]
                 transform transition-all duration-500 ease-out shadow-2xl md:shadow-[0_8px_32px_rgba(0,0,0,0.12)]
@@ -288,7 +272,6 @@
                 </div>
               </aside>
 
-              {/* Main Content Area */}
               <main className="flex-1 p-6 md:p-8 lg:p-12 w-full h-screen overflow-y-auto scroll-smooth relative z-10">
                 <header className="mb-12 animate-in fade-in slide-in-from-top-8 duration-1000 flex flex-col md:flex-row md:items-end justify-between gap-4">
                   <div>
@@ -308,7 +291,6 @@
                     </p>
                   </div>
                   
-                  {/* Status Indicator */}
                   <div className="hidden md:flex items-center space-x-4">
                     <div className={`px-4 py-2 rounded-2xl backdrop-blur-xl border flex items-center space-x-3 ${theme === 'dark' ? 'bg-white/5 border-white/5' : 'bg-white/60 border-white'}`}>
                       {isSyncing ? (
@@ -323,7 +305,6 @@
                   </div>
                 </header>
 
-                {/* Views */}
                 <div className="animate-in fade-in slide-in-from-bottom-12 duration-1000 pb-20">
                   {currentView === 'dashboard' && <DashboardView stats={stats} transactions={transactions} employees={employees} devices={devices} theme={theme} setView={setCurrentView} />}
                   {currentView === 'transactions' && <TransactionView devices={devices} employees={employees} onTransaction={handleBorrowReturn} theme={theme} />}
@@ -337,13 +318,12 @@
           );
         }
 
-        // ======================= Views =======================
+        // ======================= Sub Views =======================
 
         function DashboardView({ stats, transactions, employees, devices, theme, setView }) {
           const StatCard = ({ title, count, icon: Icon, colorClass, gradientClass }) => (
             <div className={`relative overflow-hidden rounded-[2rem] p-8 transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl group border backdrop-blur-xl ${theme === 'dark' ? 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/10' : 'bg-white/70 border-white shadow-xl shadow-slate-200/50 hover:bg-white'}`}>
               <div className={`absolute -top-10 -right-10 w-40 h-40 rounded-full opacity-20 blur-2xl transition-transform duration-700 group-hover:scale-150 group-hover:opacity-40 ${gradientClass}`} />
-              
               <div className="flex flex-col justify-between h-full relative z-10 space-y-6">
                 <div className={`p-4 rounded-2xl w-max transition-transform duration-500 group-hover:rotate-12 group-hover:scale-110 ${colorClass}`}>
                   <Icon size={32} strokeWidth={2} />
@@ -374,14 +354,10 @@
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-                <StatCard title="วิทยุทั้งหมด" count={stats.total} icon={Radio} 
-                  colorClass={theme === 'dark' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'} gradientClass="bg-blue-500" />
-                <StatCard title="พร้อมใช้งาน" count={stats.available} icon={CheckCircle2} 
-                  colorClass={theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-600'} gradientClass="bg-emerald-500" />
-                <StatCard title="ถูกเบิกใช้งาน" count={stats.borrowed} icon={ArrowRightLeft} 
-                  colorClass={theme === 'dark' ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-600'} gradientClass="bg-amber-500" />
-                <StatCard title="ส่งซ่อมบำรุง" count={stats.maintenance} icon={Wrench} 
-                  colorClass={theme === 'dark' ? 'bg-rose-500/20 text-rose-400' : 'bg-rose-100 text-rose-600'} gradientClass="bg-rose-500" />
+                <StatCard title="วิทยุทั้งหมด" count={stats.total} icon={Radio} colorClass={theme === 'dark' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'} gradientClass="bg-blue-500" />
+                <StatCard title="พร้อมใช้งาน" count={stats.available} icon={CheckCircle2} colorClass={theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-600'} gradientClass="bg-emerald-500" />
+                <StatCard title="ถูกเบิกใช้งาน" count={stats.borrowed} icon={ArrowRightLeft} colorClass={theme === 'dark' ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-600'} gradientClass="bg-amber-500" />
+                <StatCard title="ส่งซ่อมบำรุง" count={stats.maintenance} icon={Wrench} colorClass={theme === 'dark' ? 'bg-rose-500/20 text-rose-400' : 'bg-rose-100 text-rose-600'} gradientClass="bg-rose-500" />
               </div>
 
               <div className={`rounded-[2.5rem] border backdrop-blur-xl overflow-hidden shadow-2xl ${theme === 'dark' ? 'bg-white/5 border-white/10 shadow-black/50' : 'bg-white/80 border-white shadow-slate-200/50'}`}>
@@ -466,12 +442,10 @@
         function TransactionView({ devices, employees, onTransaction, theme }) {
           const [actionType, setActionType] = useState('borrow'); 
           const [selectedDevices, setSelectedDevices] = useState([]);
-          
           const [empSearchQuery, setEmpSearchQuery] = useState('');
           const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
           const [showEmpDropdown, setShowEmpDropdown] = useState(false);
           const empDropdownRef = useRef(null);
-
           const [location, setLocation] = useState('');
           const [note, setNote] = useState('');
 
@@ -1147,7 +1121,7 @@
                       type="date" 
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
-                      className={`w-full rounded-2xl p-4 outline-none focus:ring-4 focus:ring-indigo-500/20 border transition-all font-bold ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white focus:border-indigo-500/50' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-indigo-500'}`} 
+                      className={`w-full rounded-2xl p-4 outline-none focus:ring-4 focus:ring-indigo-500/20 border transition-all font-bold ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white focus:border-indigo-500/50 color-scheme-dark' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-indigo-500'}`} 
                     />
                   </div>
                   <div className="md:col-span-1">
@@ -1156,7 +1130,7 @@
                       type="date" 
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
-                      className={`w-full rounded-2xl p-4 outline-none focus:ring-4 focus:ring-indigo-500/20 border transition-all font-bold ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white focus:border-indigo-500/50' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-indigo-500'}`} 
+                      className={`w-full rounded-2xl p-4 outline-none focus:ring-4 focus:ring-indigo-500/20 border transition-all font-bold ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white focus:border-indigo-500/50 color-scheme-dark' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-indigo-500'}`} 
                     />
                   </div>
                   <div className="md:col-span-2">
