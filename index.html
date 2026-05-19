@@ -1,0 +1,1391 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CommsControl - ระบบเบิกคืนวิทยุ</title>
+    
+    <!-- PWA Settings -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#060913">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & Babel -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-[#060913]">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // 1. ดึง React Hooks ออกมาใช้งาน (สำหรับการรันผ่าน CDN)
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // 2. ดึง Icons จาก Lucide
+        const { 
+          Radio, Users, ArrowRightLeft, LayoutDashboard, 
+          Search, Plus, CheckCircle2, XCircle, Wrench, 
+          Clock, Menu, X, Trash2, Edit, AlertCircle, Save,
+          Database, Download, Upload, FileText, FileJson,
+          Sun, Moon, MapPin, CheckSquare, Square, MessageSquareWarning, ChevronRight,
+          Sparkles, Activity, TrendingUp, Zap, FileBarChart, CalendarDays, UserPlus, RefreshCw
+        } = lucide;
+
+        // --- Configuration ---
+        // ⚠️ ใส่ URL ของ Google Apps Script Web App ที่ได้จากขั้นตอน Deploy ที่นี่
+        const GAS_URL = 'https://script.google.com/macros/s/AKfycbx6x2YG9ikeoZUK5DUI9QJ4A8FmqtkNYjDnQMTmSZQg3HWx2d8CIk5gC5pYbHqq88YE/exec'; 
+
+        // --- Mock Data (ข้อมูลจำลองกรณีไม่มี GAS_URL) ---
+        const mockDevices = [
+          { id: 'R-001', model: 'Motorola CP200d', serial: 'S/N-9901', status: 'available' },
+          { id: 'R-002', model: 'Motorola CP200d', serial: 'S/N-9902', status: 'borrowed', assignedTo: 'EMP-001' },
+          { id: 'R-003', model: 'Icom IC-V80', serial: 'S/N-8801', status: 'maintenance' },
+          { id: 'R-004', model: 'Icom IC-V80', serial: 'S/N-8802', status: 'available' },
+          { id: 'R-005', model: 'Icom IC-V80', serial: 'S/N-8803', status: 'available' },
+        ];
+
+        const mockEmployees = [
+          { id: 'EMP-001', name: 'สมชาย ใจกล้า', department: 'รักษาความปลอดภัย', phone: '081-111-1111' },
+          { id: 'EMP-002', name: 'วิชัย รักงาน', department: 'ช่างซ่อมบำรุง', phone: '082-222-2222' },
+          { id: 'EMP-003', name: 'สมศรี ดีเสมอ', department: 'ธุรการ', phone: '083-333-3333' },
+        ];
+
+        const mockTransactions = [
+          { id: 'T-1001', deviceId: 'R-002', employeeId: 'EMP-001', type: 'borrow', timestamp: new Date(Date.now() - 86400000).toISOString(), note: 'เบิกลาดตระเวน', location: 'ลานจอดรถ A' },
+        ];
+
+        // --- Main Application Component ---
+        function App() {
+          const [currentView, setCurrentView] = useState('dashboard');
+          const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+          
+          // Application State
+          const [devices, setDevices] = useState(mockDevices);
+          const [employees, setEmployees] = useState(mockEmployees);
+          const [transactions, setTransactions] = useState(mockTransactions);
+          const [isLoading, setIsLoading] = useState(false);
+          const [isSyncing, setIsSyncing] = useState(false);
+          const [theme, setTheme] = useState('dark'); 
+
+          // Stats
+          const stats = useMemo(() => {
+            return {
+              total: devices.length,
+              available: devices.filter(d => d.status === 'available').length,
+              borrowed: devices.filter(d => d.status === 'borrowed').length,
+              maintenance: devices.filter(d => d.status === 'maintenance').length,
+            };
+          }, [devices]);
+
+          const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+
+          // --- API Functions (เชื่อมต่อ GAS) ---
+          const fetchData = async () => {
+            if (!GAS_URL) return;
+            setIsLoading(true);
+            try {
+              const response = await fetch(GAS_URL);
+              const data = await response.json();
+              if (data.devices) setDevices(data.devices);
+              if (data.employees) setEmployees(data.employees);
+              if (data.transactions) setTransactions(data.transactions);
+              console.log("Data loaded from GAS");
+            } catch (error) {
+              console.error("Error fetching data:", error);
+            } finally {
+              setIsLoading(false);
+            }
+          };
+
+          const syncToGAS = async (payload) => {
+            if (!GAS_URL) return;
+            setIsSyncing(true);
+            try {
+              // ใช้ Content-Type: text/plain เพื่อหลีกเลี่ยงปัญหา CORS Preflight กับ GAS
+              await fetch(GAS_URL, {
+                method: 'POST',
+                body: JSON.stringify(payload),
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+              });
+            } catch (error) {
+              console.error("Sync Error:", error);
+            } finally {
+              setIsSyncing(false);
+            }
+          };
+
+          useEffect(() => {
+            fetchData();
+          }, []);
+
+          // --- Handlers ---
+          const handleBorrowReturn = (deviceIds, employeeId, type, note, location) => {
+            const timestamp = new Date().toISOString();
+            
+            const newTransactions = deviceIds.map((deviceId, index) => ({
+              id: `T-${Date.now()}-${index}`,
+              deviceId,
+              employeeId: type === 'borrow' ? employeeId : null, 
+              type,
+              timestamp,
+              note,
+              location: type === 'borrow' ? location : '-'
+            }));
+
+            const updatedTransactions = [...newTransactions, ...transactions];
+            setTransactions(updatedTransactions);
+            
+            const updatedDevices = devices.map(d => {
+              if (deviceIds.includes(d.id)) {
+                return { 
+                  ...d, 
+                  status: type === 'borrow' ? 'borrowed' : 'available',
+                  assignedTo: type === 'borrow' ? employeeId : null
+                };
+              }
+              return d;
+            });
+            setDevices(updatedDevices);
+
+            // Sync to backend
+            syncToGAS({
+              action: 'transaction',
+              newTransactions,
+              updatedDevices
+            });
+
+            alert(`🎉 ทำรายการ${type === 'borrow' ? 'เบิก' : 'คืน'} อุปกรณ์จำนวน ${deviceIds.length} รายการ สำเร็จ!`);
+            setCurrentView('dashboard');
+          };
+
+          const handleMaintenanceReport = (deviceId, issueNote) => {
+            const newTransaction = {
+              id: `T-${Date.now()}-M`,
+              deviceId,
+              employeeId: null,
+              type: 'maintenance',
+              timestamp: new Date().toISOString(),
+              note: `อาการเสีย: ${issueNote}`,
+              location: '-'
+            };
+            
+            const updatedTransactions = [newTransaction, ...transactions];
+            const updatedDevices = devices.map(d => d.id === deviceId ? { ...d, status: 'maintenance' } : d);
+            
+            setTransactions(updatedTransactions);
+            setDevices(updatedDevices);
+            
+            syncToGAS({ action: 'transaction', newTransactions: [newTransaction], updatedDevices });
+            alert('บันทึกการแจ้งซ่อมเข้าสู่ระบบแล้ว');
+          };
+
+          const handleAddDevice = (newDevice) => {
+            const newDeviceWithStatus = { ...newDevice, status: 'available' };
+            const updatedDevices = [...devices, newDeviceWithStatus];
+            setDevices(updatedDevices);
+            syncToGAS({ action: 'addDevice', newDevice: newDeviceWithStatus });
+          };
+
+          const handleAddEmployee = (newEmployee) => {
+            const updatedEmployees = [...employees, newEmployee];
+            setEmployees(updatedEmployees);
+            syncToGAS({ action: 'addEmployee', newEmployee });
+          };
+
+          // --- Navigation Component ---
+          const NavItem = ({ id, icon: Icon, label }) => {
+            const isActive = currentView === id;
+            return (
+              <button
+                onClick={() => { setCurrentView(id); setIsMobileMenuOpen(false); }}
+                className={`w-full flex items-center space-x-3 px-5 py-4 rounded-2xl transition-all duration-500 group relative overflow-hidden ${
+                  isActive 
+                    ? 'text-white' 
+                    : theme === 'dark' 
+                      ? 'text-slate-400 hover:text-slate-100 hover:bg-white/5' 
+                      : 'text-slate-500 hover:text-indigo-700 hover:bg-indigo-500/5'
+                }`}
+              >
+                {isActive && (
+                  <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 opacity-90 transition-opacity" />
+                )}
+                <div className="relative z-10 flex items-center w-full">
+                  <Icon size={22} className={`transition-transform duration-500 mr-4 ${isActive ? 'scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'group-hover:scale-110 group-hover:rotate-6'}`} />
+                  <span className={`font-semibold tracking-wide ${isActive ? 'drop-shadow-md' : ''}`}>{label}</span>
+                  {isActive && <ChevronRight size={18} className="ml-auto opacity-80 animate-pulse" />}
+                </div>
+              </button>
+            );
+          };
+
+          const bgStyle = theme === 'dark' 
+            ? 'bg-[#060913] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#131B2F] via-[#060913] to-black' 
+            : 'bg-slate-50 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-50 via-white to-sky-50';
+
+          return (
+            <div className={`min-h-screen flex flex-col md:flex-row font-sans transition-colors duration-700 selection:bg-indigo-500/30 overflow-hidden ${bgStyle} ${theme === 'dark' ? 'text-slate-100' : 'text-slate-800'}`}>
+              
+              {/* Background Decorative Blobs */}
+              <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-600/20 blur-[120px] pointer-events-none" />
+              <div className="fixed bottom-[-10%] right-[-5%] w-[30%] h-[40%] rounded-full bg-purple-600/20 blur-[120px] pointer-events-none" />
+
+              {/* Mobile Header */}
+              <div className={`md:hidden px-6 py-4 flex justify-between items-center sticky top-0 z-40 backdrop-blur-2xl border-b ${theme === 'dark' ? 'bg-slate-900/60 border-white/5' : 'bg-white/60 border-slate-200/50'}`}>
+                <div className="flex items-center space-x-3">
+                  <div className="p-2.5 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl shadow-lg shadow-indigo-500/30 text-white">
+                    <Radio size={22} />
+                  </div>
+                  <span className="font-black text-xl tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-500">Comms.</span>
+                </div>
+                <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className={`p-2 rounded-xl backdrop-blur-md transition-colors ${theme === 'dark' ? 'bg-white/5 text-slate-300' : 'bg-slate-100/50 text-slate-600'}`}>
+                  {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+                </button>
+              </div>
+
+              {/* Floating Sidebar Navigation */}
+              <aside className={`
+                fixed md:relative top-0 left-0 z-30 h-screen md:h-[calc(100vh-2rem)] md:m-4 w-72 flex-shrink-0 flex flex-col rounded-none md:rounded-[2rem]
+                transform transition-all duration-500 ease-out shadow-2xl md:shadow-[0_8px_32px_rgba(0,0,0,0.12)]
+                ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+                ${theme === 'dark' ? 'bg-[#0f1524]/80 border md:border-white/5' : 'bg-white/80 border md:border-white'} backdrop-blur-2xl
+              `}>
+                <div className="p-8 hidden md:flex items-center space-x-4">
+                  <div className="p-3 bg-gradient-to-tr from-indigo-500 via-purple-500 to-indigo-500 bg-[length:200%_auto] animate-gradient rounded-2xl shadow-lg shadow-indigo-500/30 text-white transform transition-transform hover:scale-105 duration-300">
+                    <Radio size={28} strokeWidth={2.5} />
+                  </div>
+                  <span className="font-black text-3xl tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-500">Comms.</span>
+                </div>
+                
+                <nav className="px-4 py-2 space-y-2 flex-1 mt-8 md:mt-0 overflow-y-auto scrollbar-hide">
+                  <p className={`px-5 text-[10px] font-black tracking-[0.2em] uppercase mb-4 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>Application</p>
+                  <NavItem id="dashboard" icon={LayoutDashboard} label="ภาพรวมระบบ" />
+                  <NavItem id="transactions" icon={ArrowRightLeft} label="เบิก-คืน อุปกรณ์" />
+                  <NavItem id="devices" icon={Radio} label="คลังวิทยุสื่อสาร" />
+                  <NavItem id="employees" icon={Users} label="บุคลากร" />
+                  <NavItem id="reports" icon={FileBarChart} label="รายงาน" />
+                </nav>
+
+                <div className={`p-4 mx-4 mb-4 rounded-3xl border space-y-2 ${theme === 'dark' ? 'bg-white/5 border-white/5' : 'bg-slate-50/50 border-slate-100'}`}>
+                   <NavItem id="data" icon={Database} label="จัดการข้อมูล" />
+                   <button 
+                     onClick={toggleTheme} 
+                     className={`w-full flex items-center space-x-4 px-5 py-4 rounded-2xl transition-all duration-300 group ${theme === 'dark' ? 'text-amber-300 hover:bg-white/5 font-semibold' : 'text-indigo-900 hover:bg-white font-semibold'}`}
+                   >
+                     <div className={`p-1.5 rounded-lg transition-transform group-hover:rotate-45 ${theme === 'dark' ? 'bg-amber-400/20' : 'bg-indigo-100'}`}>
+                       {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                     </div>
+                     <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+                   </button>
+                </div>
+              </aside>
+
+              {/* Main Content Area */}
+              <main className="flex-1 p-6 md:p-8 lg:p-12 w-full h-screen overflow-y-auto scroll-smooth relative z-10">
+                <header className="mb-12 animate-in fade-in slide-in-from-top-8 duration-1000 flex flex-col md:flex-row md:items-end justify-between gap-4">
+                  <div>
+                    <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-bold tracking-widest uppercase mb-4 border ${theme === 'dark' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-indigo-50 text-indigo-600 border-indigo-100'}`}>
+                      <Sparkles size={12} className="mr-1" /> System Ready
+                    </div>
+                    <h1 className={`text-4xl md:text-5xl font-black tracking-tight mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
+                      {currentView === 'dashboard' && 'Welcome back.'}
+                      {currentView === 'transactions' && 'Borrow & Return'}
+                      {currentView === 'devices' && 'Device Inventory'}
+                      {currentView === 'employees' && 'Directory'}
+                      {currentView === 'reports' && 'Analytics & Reports'}
+                      {currentView === 'data' && 'Data Management'}
+                    </h1>
+                    <p className={`text-base md:text-lg font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {isLoading ? 'Downloading data from cloud...' : 'จัดการวิทยุสื่อสารของคุณได้อย่างง่ายดายและชาญฉลาด'}
+                    </p>
+                  </div>
+                  
+                  {/* Status Indicator */}
+                  <div className="hidden md:flex items-center space-x-4">
+                    <div className={`px-4 py-2 rounded-2xl backdrop-blur-xl border flex items-center space-x-3 ${theme === 'dark' ? 'bg-white/5 border-white/5' : 'bg-white/60 border-white'}`}>
+                      {isSyncing ? (
+                        <RefreshCw size={14} className={`animate-spin ${theme === 'dark' ? 'text-indigo-400' : 'text-indigo-600'}`} />
+                      ) : (
+                        <div className={`w-2 h-2 rounded-full ${GAS_URL ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                      )}
+                      <span className={`text-sm font-bold ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>
+                        {isSyncing ? 'Syncing...' : GAS_URL ? 'Online' : 'Local Mode'}
+                      </span>
+                    </div>
+                  </div>
+                </header>
+
+                {/* Views */}
+                <div className="animate-in fade-in slide-in-from-bottom-12 duration-1000 pb-20">
+                  {currentView === 'dashboard' && <DashboardView stats={stats} transactions={transactions} employees={employees} devices={devices} theme={theme} setView={setCurrentView} />}
+                  {currentView === 'transactions' && <TransactionView devices={devices} employees={employees} onTransaction={handleBorrowReturn} theme={theme} />}
+                  {currentView === 'devices' && <DevicesView devices={devices} onAddDevice={handleAddDevice} setDevices={setDevices} theme={theme} onReportMaintenance={handleMaintenanceReport} />}
+                  {currentView === 'employees' && <EmployeesView employees={employees} onAddEmployee={handleAddEmployee} theme={theme} />}
+                  {currentView === 'reports' && <ReportsView transactions={transactions} employees={employees} devices={devices} theme={theme} />}
+                  {currentView === 'data' && <DataManagementView devices={devices} setDevices={setDevices} employees={employees} setEmployees={setEmployees} transactions={transactions} setTransactions={setTransactions} theme={theme} />}
+                </div>
+              </main>
+            </div>
+          );
+        }
+
+        // ======================= Views =======================
+
+        function DashboardView({ stats, transactions, employees, devices, theme, setView }) {
+          const StatCard = ({ title, count, icon: Icon, colorClass, gradientClass }) => (
+            <div className={`relative overflow-hidden rounded-[2rem] p-8 transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl group border backdrop-blur-xl ${theme === 'dark' ? 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/10' : 'bg-white/70 border-white shadow-xl shadow-slate-200/50 hover:bg-white'}`}>
+              <div className={`absolute -top-10 -right-10 w-40 h-40 rounded-full opacity-20 blur-2xl transition-transform duration-700 group-hover:scale-150 group-hover:opacity-40 ${gradientClass}`} />
+              
+              <div className="flex flex-col justify-between h-full relative z-10 space-y-6">
+                <div className={`p-4 rounded-2xl w-max transition-transform duration-500 group-hover:rotate-12 group-hover:scale-110 ${colorClass}`}>
+                  <Icon size={32} strokeWidth={2} />
+                </div>
+                <div>
+                  <p className={`text-5xl font-black tracking-tighter mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{count}</p>
+                  <p className={`text-sm font-bold tracking-wide uppercase ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{title}</p>
+                </div>
+              </div>
+            </div>
+          );
+
+          return (
+            <div className="space-y-10">
+              <div className={`relative overflow-hidden rounded-[2.5rem] p-8 md:p-12 border ${theme === 'dark' ? 'bg-gradient-to-br from-indigo-900/40 to-purple-900/20 border-white/10' : 'bg-gradient-to-br from-indigo-50 to-purple-50 border-white shadow-xl shadow-indigo-100/50'}`}>
+                <div className="relative z-10 max-w-2xl">
+                  <h2 className={`text-2xl md:text-3xl font-black mb-4 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>ควบคุมการสื่อสารได้เต็มประสิทธิภาพ</h2>
+                  <p className={`text-lg font-medium mb-8 leading-relaxed ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>ภาพรวมการใช้งานวิทยุสื่อสารวันนี้ ระบบทำงานปกติและพร้อมให้บริการ</p>
+                  <div className="flex flex-wrap gap-4">
+                    <button onClick={() => setView('reports')} className="px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:-translate-y-1 transition-all flex items-center">
+                      <Activity size={20} className="mr-2"/> ดูรายงานแบบละเอียด
+                    </button>
+                  </div>
+                </div>
+                <div className="absolute right-0 bottom-0 opacity-10 md:opacity-100 translate-x-1/4 translate-y-1/4 pointer-events-none">
+                  <div className={`w-96 h-96 rounded-full blur-[80px] ${theme === 'dark' ? 'bg-indigo-500/30' : 'bg-indigo-400/20'}`} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+                <StatCard title="วิทยุทั้งหมด" count={stats.total} icon={Radio} 
+                  colorClass={theme === 'dark' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'} gradientClass="bg-blue-500" />
+                <StatCard title="พร้อมใช้งาน" count={stats.available} icon={CheckCircle2} 
+                  colorClass={theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-600'} gradientClass="bg-emerald-500" />
+                <StatCard title="ถูกเบิกใช้งาน" count={stats.borrowed} icon={ArrowRightLeft} 
+                  colorClass={theme === 'dark' ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-600'} gradientClass="bg-amber-500" />
+                <StatCard title="ส่งซ่อมบำรุง" count={stats.maintenance} icon={Wrench} 
+                  colorClass={theme === 'dark' ? 'bg-rose-500/20 text-rose-400' : 'bg-rose-100 text-rose-600'} gradientClass="bg-rose-500" />
+              </div>
+
+              <div className={`rounded-[2.5rem] border backdrop-blur-xl overflow-hidden shadow-2xl ${theme === 'dark' ? 'bg-white/5 border-white/10 shadow-black/50' : 'bg-white/80 border-white shadow-slate-200/50'}`}>
+                <div className={`p-8 border-b flex justify-between items-center ${theme === 'dark' ? 'border-white/5' : 'border-slate-100'}`}>
+                  <h2 className="text-xl font-black flex items-center space-x-3">
+                    <div className={`p-2.5 rounded-xl ${theme === 'dark' ? 'bg-white/10 text-white' : 'bg-slate-100 text-slate-800'}`}>
+                      <Clock size={20} strokeWidth={2.5} />
+                    </div>
+                    <span>ประวัติรายการล่าสุด</span>
+                  </h2>
+                  <button onClick={() => setView('reports')} className={`text-sm font-bold px-4 py-2 rounded-xl transition-colors ${theme === 'dark' ? 'bg-white/5 text-slate-300 hover:bg-white/10' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}>
+                    ดูทั้งหมด
+                  </button>
+                </div>
+                <div className="overflow-x-auto p-4">
+                  <table className="w-full text-left border-collapse min-w-[900px]">
+                    <thead>
+                      <tr className={`text-xs tracking-widest uppercase font-bold ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                        <th className="p-4 rounded-l-2xl">วัน-เวลา</th>
+                        <th className="p-4">รายการ</th>
+                        <th className="p-4">รหัสเครื่อง</th>
+                        <th className="p-4">ผู้ทำรายการ</th>
+                        <th className="p-4">สถานที่</th>
+                        <th className="p-4 rounded-r-2xl">หมายเหตุ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {transactions.slice(0, 5).map((t) => {
+                        const emp = employees.find(e => e.id === t.employeeId);
+                        const isBorrow = t.type === 'borrow';
+                        const isMaintenance = t.type === 'maintenance';
+                        return (
+                          <tr key={t.id} className={`group transition-all duration-300 hover:-translate-y-0.5 ${theme === 'dark' ? 'hover:bg-white/[0.03]' : 'hover:bg-slate-50'}`}>
+                            <td className={`p-4 font-medium rounded-l-2xl ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>
+                              {new Date(t.timestamp).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}
+                            </td>
+                            <td className="p-4">
+                              <span className={`inline-flex items-center px-4 py-1.5 rounded-xl text-xs font-black tracking-wide border ${
+                                isMaintenance ? (theme==='dark' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-rose-50 text-rose-700 border-rose-200') : 
+                                isBorrow ? (theme==='dark' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200') : 
+                                (theme==='dark' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200')
+                              }`}>
+                                {isMaintenance ? 'แจ้งซ่อม' : isBorrow ? 'เบิกใช้งาน' : 'คืนอุปกรณ์'}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className={`font-black tracking-wide ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{t.deviceId}</span>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex items-center space-x-3">
+                                {emp && (
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${theme === 'dark' ? 'bg-indigo-500/20 text-indigo-300' : 'bg-indigo-100 text-indigo-700'}`}>
+                                    {emp.name.charAt(0)}
+                                  </div>
+                                )}
+                                <span className={`font-bold ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{emp ? emp.name : '-'}</span>
+                              </div>
+                            </td>
+                            <td className={`p-4 font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{t.location || '-'}</td>
+                            <td className={`p-4 text-sm font-medium rounded-r-2xl ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>{t.note || '-'}</td>
+                          </tr>
+                        );
+                      })}
+                      {transactions.length === 0 && (
+                        <tr>
+                          <td colSpan="6" className="p-10 text-center text-slate-500">
+                            <div className="flex flex-col items-center justify-center space-y-3">
+                              <FileText size={40} className="text-slate-300" />
+                              <p>ยังไม่มีประวัติการทำรายการ</p>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        function TransactionView({ devices, employees, onTransaction, theme }) {
+          const [actionType, setActionType] = useState('borrow'); 
+          const [selectedDevices, setSelectedDevices] = useState([]);
+          
+          const [empSearchQuery, setEmpSearchQuery] = useState('');
+          const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+          const [showEmpDropdown, setShowEmpDropdown] = useState(false);
+          const empDropdownRef = useRef(null);
+
+          const [location, setLocation] = useState('');
+          const [note, setNote] = useState('');
+
+          const availableDevices = devices.filter(d => d.status === 'available');
+          const borrowedDevices = devices.filter(d => d.status === 'borrowed');
+
+          useEffect(() => {
+            function handleClickOutside(event) {
+              if (empDropdownRef.current && !empDropdownRef.current.contains(event.target)) {
+                setShowEmpDropdown(false);
+              }
+            }
+            document.addEventListener("mousedown", handleClickOutside);
+            return () => document.removeEventListener("mousedown", handleClickOutside);
+          }, []);
+
+          const toggleDeviceSelection = (id) => {
+            if (selectedDevices.includes(id)) {
+              setSelectedDevices(selectedDevices.filter(deviceId => deviceId !== id));
+            } else {
+              setSelectedDevices([...selectedDevices, id]);
+            }
+          };
+
+          const handleSelectEmployee = (emp) => {
+            setSelectedEmployeeId(emp.id);
+            setEmpSearchQuery(`${emp.id} - ${emp.name}`);
+            setShowEmpDropdown(false);
+          };
+
+          const handleSubmit = (e) => {
+            e.preventDefault();
+            if (selectedDevices.length === 0) return alert('กรุณาเลือกอุปกรณ์อย่างน้อย 1 รายการ');
+            if (actionType === 'borrow' && !selectedEmployeeId) return alert('กรุณาเลือกหรือค้นหาพนักงานผู้เบิกจากระบบ');
+            if (actionType === 'borrow' && !location) return alert('กรุณาระบุสถานที่ใช้งาน');
+            
+            let empId = selectedEmployeeId;
+            if (actionType === 'return') {
+              const device = devices.find(d => d.id === selectedDevices[0]);
+              empId = device?.assignedTo || '';
+            }
+
+            onTransaction(selectedDevices, empId, actionType, note, location);
+            setSelectedDevices([]);
+            setSelectedEmployeeId('');
+            setEmpSearchQuery('');
+            setLocation('');
+            setNote('');
+          };
+
+          const filteredEmployeesForDropdown = employees.filter(e => 
+            e.name.toLowerCase().includes(empSearchQuery.toLowerCase()) || 
+            e.id.toLowerCase().includes(empSearchQuery.toLowerCase())
+          );
+
+          return (
+            <div className="max-w-5xl mx-auto space-y-8">
+              <div className={`p-2 rounded-3xl flex items-center backdrop-blur-xl border ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-white/60 border-white shadow-sm'}`}>
+                <button
+                  type="button"
+                  onClick={() => { setActionType('borrow'); setSelectedDevices([]); }}
+                  className={`flex-1 py-4 text-base font-bold rounded-2xl transition-all duration-500 ${
+                    actionType === 'borrow' 
+                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/30' 
+                      : theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-indigo-800 hover:bg-slate-100'
+                  }`}
+                >
+                  เบิกอุปกรณ์ (Borrow)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setActionType('return'); setSelectedDevices([]); }}
+                  className={`flex-1 py-4 text-base font-bold rounded-2xl transition-all duration-500 ${
+                    actionType === 'return' 
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30' 
+                      : theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-emerald-800 hover:bg-slate-100'
+                  }`}
+                >
+                  คืนอุปกรณ์ (Return)
+                </button>
+              </div>
+
+              <div className={`rounded-[2.5rem] border backdrop-blur-xl p-8 md:p-12 shadow-2xl ${theme === 'dark' ? 'bg-white/5 border-white/10 shadow-black/50' : 'bg-white/80 border-white shadow-slate-200/50'}`}>
+                <form onSubmit={handleSubmit} className="space-y-10">
+                  <div className="space-y-6">
+                    <div className="flex justify-between items-center pb-4 border-b border-dashed border-slate-200 dark:border-white/10">
+                      <h3 className={`text-2xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>1. เลือกอุปกรณ์</h3>
+                      <span className={`px-4 py-1.5 rounded-xl text-sm font-bold tracking-wide ${selectedDevices.length > 0 ? (actionType === 'borrow' ? 'bg-indigo-500 text-white' : 'bg-emerald-500 text-white') : (theme === 'dark' ? 'bg-white/10 text-slate-400' : 'bg-slate-100 text-slate-500')}`}>
+                        เลือกแล้ว {selectedDevices.length}
+                      </span>
+                    </div>
+                    
+                    <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin ${theme === 'dark' ? 'scrollbar-thumb-white/10' : 'scrollbar-thumb-slate-200'}`}>
+                      {actionType === 'borrow' ? (
+                        availableDevices.length > 0 ? availableDevices.map(d => {
+                          const isSelected = selectedDevices.includes(d.id);
+                          return (
+                            <div 
+                              key={d.id} 
+                              onClick={() => toggleDeviceSelection(d.id)}
+                              className={`relative flex flex-col p-5 rounded-3xl cursor-pointer border-2 transition-all duration-300 ease-out active:scale-95 overflow-hidden ${
+                                isSelected 
+                                  ? (theme === 'dark' ? 'bg-indigo-600/20 border-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.15)]' : 'bg-indigo-50 border-indigo-500 shadow-xl shadow-indigo-500/20') 
+                                  : (theme === 'dark' ? 'bg-white/5 border-transparent hover:bg-white/10 hover:border-white/10' : 'bg-white border-transparent shadow-sm hover:shadow-md hover:border-slate-200')
+                              }`}
+                            >
+                              {isSelected && <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/10 to-transparent pointer-events-none" />}
+                              <div className="flex justify-between items-start mb-4 relative z-10">
+                                <Radio size={24} className={isSelected ? 'text-indigo-500' : (theme === 'dark' ? 'text-slate-500' : 'text-slate-400')} />
+                                {isSelected ? <CheckSquare className="text-indigo-500" size={20}/> : <Square className={theme === 'dark' ? 'text-slate-600' : 'text-slate-300'} size={20}/>}
+                              </div>
+                              <div className="relative z-10">
+                                <p className={`text-lg font-black tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{d.id}</p>
+                                <p className={`text-xs font-semibold tracking-wide ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{d.model}</p>
+                              </div>
+                            </div>
+                          );
+                        }) : <div className={`col-span-full py-16 rounded-[2rem] text-center border-2 border-dashed ${theme === 'dark' ? 'border-white/10 text-slate-500' : 'border-slate-200 text-slate-400'}`}><AlertCircle size={40} className="mx-auto mb-4 opacity-50"/>ไม่พบอุปกรณ์พร้อมใช้งาน</div>
+                      ) : (
+                        borrowedDevices.length > 0 ? borrowedDevices.map(d => {
+                          const isSelected = selectedDevices.includes(d.id);
+                          return (
+                            <div 
+                              key={d.id} 
+                              onClick={() => toggleDeviceSelection(d.id)}
+                              className={`relative flex flex-col p-5 rounded-3xl cursor-pointer border-2 transition-all duration-300 ease-out active:scale-95 overflow-hidden ${
+                                isSelected 
+                                  ? (theme === 'dark' ? 'bg-emerald-600/20 border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.15)]' : 'bg-emerald-50 border-emerald-500 shadow-xl shadow-emerald-500/20') 
+                                  : (theme === 'dark' ? 'bg-white/5 border-transparent hover:bg-white/10 hover:border-white/10' : 'bg-white border-transparent shadow-sm hover:shadow-md hover:border-slate-200')
+                              }`}
+                            >
+                              {isSelected && <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/10 to-transparent pointer-events-none" />}
+                              <div className="flex justify-between items-start mb-4 relative z-10">
+                                <Radio size={24} className={isSelected ? 'text-emerald-500' : (theme === 'dark' ? 'text-slate-500' : 'text-slate-400')} />
+                                {isSelected ? <CheckSquare className="text-emerald-500" size={20}/> : <Square className={theme === 'dark' ? 'text-slate-600' : 'text-slate-300'} size={20}/>}
+                              </div>
+                              <div className="relative z-10 flex-1 flex flex-col justify-between">
+                                <div>
+                                  <p className={`text-lg font-black tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{d.id}</p>
+                                  <p className={`text-xs font-semibold tracking-wide ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{d.model}</p>
+                                </div>
+                                <div className={`mt-4 px-3 py-1.5 rounded-xl text-xs font-bold inline-block border ${theme === 'dark' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                                  ยืมโดย: {employees.find(e => e.id === d.assignedTo)?.name.split(' ')[0] || d.assignedTo}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }) : <div className={`col-span-full py-16 rounded-[2rem] text-center border-2 border-dashed ${theme === 'dark' ? 'border-white/10 text-slate-500' : 'border-slate-200 text-slate-400'}`}><CheckCircle2 size={40} className="mx-auto mb-4 opacity-50"/>อุปกรณ์ทั้งหมดอยู่ที่คลัง (ครบถ้วน)</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-6 pt-6 border-t border-dashed border-slate-200 dark:border-white/10">
+                     <h3 className={`text-2xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>2. ข้อมูลการทำรายการ</h3>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      {actionType === 'borrow' && (
+                        <>
+                          <div className="space-y-3 relative" ref={empDropdownRef}>
+                            <label className={`block font-bold tracking-wide ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
+                              ผู้เบิกอุปกรณ์ (ค้นหาชื่อ/รหัส) <span className="text-rose-500">*</span>
+                            </label>
+                            <div className="relative group">
+                              <Search className={`absolute left-5 top-1/2 transform -translate-y-1/2 transition-colors ${theme === 'dark' ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} size={20} />
+                              <input 
+                                type="text"
+                                value={empSearchQuery}
+                                onChange={(e) => {
+                                  setEmpSearchQuery(e.target.value);
+                                  setSelectedEmployeeId(''); 
+                                  setShowEmpDropdown(true);
+                                }}
+                                onFocus={() => setShowEmpDropdown(true)}
+                                placeholder="พิมพ์ชื่อ หรือ รหัสพนักงาน..."
+                                className={`w-full pl-14 pr-4 py-4.5 rounded-2xl outline-none focus:ring-4 transition-all border font-bold text-base ${theme === 'dark' ? 'bg-white/5 border-white/10 focus:border-indigo-500/50 focus:ring-indigo-500/20 text-white placeholder:text-slate-600' : 'bg-white border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/20 text-slate-800 placeholder:text-slate-400 shadow-sm'}`}
+                                required={actionType === 'borrow'}
+                                autoComplete="off"
+                              />
+                            </div>
+                            {showEmpDropdown && empSearchQuery && (
+                              <div className={`absolute z-20 w-full mt-2 rounded-2xl border shadow-2xl max-h-60 overflow-y-auto ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                                {filteredEmployeesForDropdown.length > 0 ? (
+                                  filteredEmployeesForDropdown.map(emp => (
+                                    <div 
+                                      key={emp.id} 
+                                      onClick={() => handleSelectEmployee(emp)}
+                                      className={`px-5 py-3 cursor-pointer transition-colors border-b last:border-b-0 flex items-center space-x-3 ${theme === 'dark' ? 'border-slate-700 hover:bg-slate-700/50' : 'border-slate-100 hover:bg-indigo-50'}`}
+                                    >
+                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${theme === 'dark' ? 'bg-indigo-500/20 text-indigo-300' : 'bg-indigo-100 text-indigo-700'}`}>
+                                        {emp.name.charAt(0)}
+                                      </div>
+                                      <div>
+                                        <p className={`font-bold ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{emp.name}</p>
+                                        <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{emp.id} - {emp.department}</p>
+                                      </div>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className={`px-5 py-4 text-center text-sm ${theme === 'dark' ? 'text-slate-500' : 'text-slate-500'}`}>ไม่พบรายชื่อพนักงาน</div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="space-y-3">
+                            <label className={`block font-bold tracking-wide ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
+                              สถานที่ใช้งาน <span className="text-rose-500">*</span>
+                            </label>
+                            <div className="relative group">
+                              <MapPin className={`absolute left-5 top-1/2 transform -translate-y-1/2 transition-colors ${theme === 'dark' ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} size={20} />
+                              <input 
+                                type="text"
+                                value={location}
+                                onChange={(e) => setLocation(e.target.value)}
+                                placeholder="ระบุจุดปฏิบัติงาน..."
+                                className={`w-full pl-14 pr-4 py-4.5 rounded-2xl outline-none focus:ring-4 transition-all border font-bold text-base ${theme === 'dark' ? 'bg-white/5 border-white/10 focus:border-indigo-500/50 focus:ring-indigo-500/20 text-white placeholder:text-slate-600' : 'bg-white border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/20 text-slate-800 placeholder:text-slate-400 shadow-sm'}`}
+                                required={actionType === 'borrow'}
+                              />
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      <div className={`space-y-3 ${actionType === 'return' ? 'col-span-full' : 'col-span-full'}`}>
+                        <label className={`block font-bold tracking-wide ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
+                          หมายเหตุ (ถ้ามี)
+                        </label>
+                        <textarea 
+                          value={note}
+                          onChange={(e) => setNote(e.target.value)}
+                          className={`w-full rounded-2xl p-5 outline-none focus:ring-4 transition-all h-32 resize-none border font-bold ${theme === 'dark' ? 'bg-white/5 border-white/10 focus:border-indigo-500/50 focus:ring-indigo-500/20 text-white placeholder:text-slate-600' : 'bg-white border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/20 text-slate-800 placeholder:text-slate-400 shadow-sm'}`}
+                          placeholder="รายละเอียดเพิ่มเติม..."
+                        ></textarea>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-8">
+                    <button 
+                      type="submit" 
+                      disabled={selectedDevices.length === 0 || (actionType === 'borrow' && (!selectedEmployeeId || !location))}
+                      className={`w-full py-5 rounded-[1.5rem] font-black text-xl text-white shadow-2xl transition-all duration-500 flex items-center justify-center space-x-3 overflow-hidden relative group
+                        ${actionType === 'borrow' 
+                          ? 'bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 bg-[length:200%_auto] hover:bg-right shadow-indigo-600/40' 
+                          : 'bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500 bg-[length:200%_auto] hover:bg-right shadow-emerald-500/40'
+                        } 
+                        disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 hover:scale-[1.02] active:scale-[0.98]
+                      `}
+                    >
+                      <div className="absolute inset-0 bg-white/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                      <span className="relative z-10 tracking-wide">{actionType === 'borrow' ? `ยืนยันเบิก ${selectedDevices.length} รายการ` : `ยืนยันรับคืน ${selectedDevices.length} รายการ`}</span>
+                      <ArrowRightLeft size={24} className={`relative z-10 transition-transform duration-500 ${actionType === 'return' ? 'rotate-180 group-hover:-rotate-180' : 'group-hover:rotate-180'}`}/>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          );
+        }
+
+        function DevicesView({ devices, onAddDevice, setDevices, theme, onReportMaintenance }) {
+          const [searchTerm, setSearchTerm] = useState('');
+          const [isAdding, setIsAdding] = useState(false);
+          const [maintenanceDevice, setMaintenanceDevice] = useState(null);
+          const [maintenanceNote, setMaintenanceNote] = useState('');
+          const [newId, setNewId] = useState('');
+          const [newModel, setNewModel] = useState('');
+          const [newSerial, setNewSerial] = useState('');
+
+          const filteredDevices = devices.filter(d => 
+            d.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            d.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            d.serial.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+
+          const handleSaveDevice = (e) => {
+            e.preventDefault();
+            if(devices.find(d => d.id === newId)) return alert('รหัสเครื่องนี้มีในระบบแล้ว!');
+            onAddDevice({ id: newId, model: newModel, serial: newSerial });
+            setIsAdding(false);
+            setNewId(''); setNewModel(''); setNewSerial('');
+          };
+
+          const updateStatus = (id, newStatus) => {
+            if (newStatus === 'maintenance') {
+              const device = devices.find(d => d.id === id);
+              setMaintenanceDevice(device);
+              setMaintenanceNote('');
+            } else {
+              setDevices(devices.map(d => d.id === id ? { ...d, status: newStatus } : d));
+            }
+          };
+
+          const confirmMaintenance = (e) => {
+            e.preventDefault();
+            if (!maintenanceNote) return;
+            onReportMaintenance(maintenanceDevice.id, maintenanceNote);
+            setMaintenanceDevice(null);
+            setMaintenanceNote('');
+          };
+
+          const getStatusBadge = (status) => {
+            switch(status) {
+              case 'available': return <span className={`px-4 py-2 rounded-xl text-xs font-black tracking-widest uppercase flex items-center w-max border ${theme === 'dark' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}><Zap size={14} className="mr-2"/> Ready</span>;
+              case 'borrowed': return <span className={`px-4 py-2 rounded-xl text-xs font-black tracking-widest uppercase flex items-center w-max border ${theme === 'dark' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]' : 'bg-amber-50 text-amber-700 border-amber-200'}`}><ArrowRightLeft size={14} className="mr-2"/> In Use</span>;
+              case 'maintenance': return <span className={`px-4 py-2 rounded-xl text-xs font-black tracking-widest uppercase flex items-center w-max border ${theme === 'dark' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 shadow-[0_0_10px_rgba(244,63,94,0.1)]' : 'bg-rose-50 text-rose-700 border-rose-200'}`}><Wrench size={14} className="mr-2"/> Repair</span>;
+              default: return <span>{status}</span>;
+            }
+          };
+
+          return (
+            <div className="space-y-10 animate-in fade-in duration-500 relative">
+              {maintenanceDevice && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                  <div className="absolute inset-0 bg-black/40 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setMaintenanceDevice(null)}></div>
+                  <div className={`relative w-full max-w-lg rounded-[2.5rem] p-10 shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 border ${theme === 'dark' ? 'bg-[#0f1524] border-white/10 shadow-black/50' : 'bg-white border-slate-100 shadow-slate-300/50'}`}>
+                    <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-8 rotate-12 shadow-lg ${theme === 'dark' ? 'bg-gradient-to-br from-rose-500/20 to-orange-500/20 text-rose-400 border border-rose-500/30' : 'bg-gradient-to-br from-rose-100 to-orange-50 text-rose-600 border border-rose-200'}`}>
+                      <MessageSquareWarning size={32} strokeWidth={2}/>
+                    </div>
+                    <h3 className={`text-3xl font-black mb-2 tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                      แจ้งปัญหาอุปกรณ์
+                    </h3>
+                    <p className={`mb-8 text-base font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                      รหัสเครื่อง: <strong className={`px-3 py-1 rounded-lg ml-2 font-black tracking-wider ${theme === 'dark' ? 'bg-white/10 text-white' : 'bg-slate-100 text-slate-800'}`}>{maintenanceDevice.id}</strong>
+                    </p>
+                    <form onSubmit={confirmMaintenance}>
+                      <label className={`block text-sm font-bold tracking-wide mb-3 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>รายละเอียดอาการเสีย <span className="text-rose-500">*</span></label>
+                      <textarea 
+                        value={maintenanceNote}
+                        onChange={e => setMaintenanceNote(e.target.value)}
+                        required
+                        placeholder="ระบุอาการให้ชัดเจนเพื่อความรวดเร็วในการซ่อม..."
+                        className={`w-full rounded-2xl p-5 outline-none focus:ring-4 transition-all h-36 resize-none border mb-8 font-medium ${theme === 'dark' ? 'bg-white/5 border-white/10 focus:border-rose-500/50 focus:ring-rose-500/20 text-white placeholder:text-slate-600' : 'bg-white border-slate-200 focus:border-rose-500 focus:ring-rose-500/20 text-slate-800 placeholder:text-slate-400'}`}
+                      ></textarea>
+                      <div className="flex space-x-4">
+                        <button type="button" onClick={() => setMaintenanceDevice(null)} className={`flex-1 py-4 rounded-2xl font-bold transition-all hover:scale-95 ${theme === 'dark' ? 'bg-white/5 text-slate-300 hover:bg-white/10' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>ยกเลิก</button>
+                        <button type="submit" className="flex-1 py-4 rounded-2xl font-black tracking-wide text-white bg-gradient-to-r from-rose-600 to-orange-500 shadow-lg shadow-rose-500/30 transition-all hover:-translate-y-1 hover:scale-[1.02] active:scale-95">ยืนยันส่งซ่อม</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                <div className="relative flex-1 max-w-xl group">
+                  <Search className={`absolute left-5 top-1/2 transform -translate-y-1/2 transition-colors ${theme === 'dark' ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} size={22} />
+                  <input 
+                    type="text" 
+                    placeholder="ค้นหาอุปกรณ์ (รหัส, รุ่น, S/N)..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className={`w-full pl-14 pr-6 py-4.5 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 border transition-all shadow-sm font-bold text-lg ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white placeholder:text-slate-600' : 'bg-white/80 border-slate-200/60 text-slate-800 placeholder:text-slate-400'}`}
+                  />
+                </div>
+                <button 
+                  onClick={() => setIsAdding(!isAdding)}
+                  className={`px-8 py-4.5 rounded-2xl font-black tracking-wide flex items-center justify-center space-x-3 transition-all duration-300 shadow-xl hover:-translate-y-1 active:scale-95 overflow-hidden relative group ${
+                    isAdding 
+                      ? theme === 'dark' ? 'bg-white/10 text-slate-200 border border-white/10' : 'bg-slate-800 text-white'
+                      : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border border-indigo-500/30'
+                  }`}
+                >
+                  {!isAdding && <div className="absolute inset-0 bg-white/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />}
+                  {isAdding ? <X size={20} className="relative z-10" /> : <Plus size={22} strokeWidth={3} className="relative z-10" />}
+                  <span className="relative z-10">{isAdding ? 'ปิดหน้าต่าง' : 'เพิ่มอุปกรณ์ใหม่'}</span>
+                </button>
+              </div>
+
+              {isAdding && (
+                <div className={`rounded-[2.5rem] border backdrop-blur-xl p-8 md:p-10 animate-in slide-in-from-top-10 duration-700 shadow-2xl ${theme === 'dark' ? 'bg-indigo-900/10 border-indigo-500/20 shadow-indigo-900/20' : 'bg-indigo-50/50 border-indigo-100 shadow-indigo-100/50'}`}>
+                  <h3 className={`text-2xl font-black mb-8 flex items-center tracking-tight ${theme === 'dark' ? 'text-indigo-400' : 'text-indigo-700'}`}>
+                    <div className={`p-2 rounded-xl mr-4 ${theme === 'dark' ? 'bg-indigo-500/20' : 'bg-indigo-100'}`}><Plus size={24} strokeWidth={3}/></div>
+                    ลงทะเบียนข้อมูลวิทยุใหม่
+                  </h3>
+                  <form onSubmit={handleSaveDevice} className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div>
+                      <label className={`block text-sm font-bold tracking-wide mb-3 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>รหัสเครื่อง (ID) <span className="text-rose-500">*</span></label>
+                      <input type="text" required value={newId} onChange={e => setNewId(e.target.value)} placeholder="เช่น R-005" className={`w-full rounded-2xl p-4 outline-none focus:ring-4 focus:ring-indigo-500/20 border transition-all font-bold ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white focus:border-indigo-500/50' : 'bg-white border-slate-200 text-slate-800 focus:border-indigo-500'}`} />
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-bold tracking-wide mb-3 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>ชื่อรุ่น (Model) <span className="text-rose-500">*</span></label>
+                      <input type="text" required value={newModel} onChange={e => setNewModel(e.target.value)} placeholder="เช่น Icom IC-V80" className={`w-full rounded-2xl p-4 outline-none focus:ring-4 focus:ring-indigo-500/20 border transition-all font-bold ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white focus:border-indigo-500/50' : 'bg-white border-slate-200 text-slate-800 focus:border-indigo-500'}`} />
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-bold tracking-wide mb-3 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>Serial Number</label>
+                      <input type="text" value={newSerial} onChange={e => setNewSerial(e.target.value)} placeholder="ระบุ S/N..." className={`w-full rounded-2xl p-4 outline-none focus:ring-4 focus:ring-indigo-500/20 border transition-all font-bold ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white focus:border-indigo-500/50' : 'bg-white border-slate-200 text-slate-800 focus:border-indigo-500'}`} />
+                    </div>
+                    <div className="md:col-span-3 flex justify-end mt-4">
+                      <button type="submit" className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-10 py-4 rounded-2xl font-black tracking-wide hover:shadow-lg hover:shadow-indigo-500/30 flex items-center transition-all hover:-translate-y-1 active:scale-95 border border-indigo-500/30">
+                        <Save size={20} className="mr-3"/> บันทึกเข้าระบบคลัง
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {filteredDevices.map(device => (
+                  <div key={device.id} className={`flex flex-col rounded-[2rem] p-7 transition-all duration-500 group border backdrop-blur-xl hover:shadow-2xl hover:-translate-y-2 ${theme === 'dark' ? 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/10' : 'bg-white/80 border-slate-200/60 hover:border-slate-300 shadow-sm'}`}>
+                    <div className="flex justify-between items-start mb-8">
+                      <div className="flex items-center space-x-4 relative">
+                        <div className={`p-4 rounded-2xl transition-transform group-hover:scale-110 group-hover:rotate-6 duration-500 ${device.status === 'available' ? (theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-600') : device.status === 'borrowed' ? (theme === 'dark' ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-600') : (theme === 'dark' ? 'bg-rose-500/20 text-rose-400' : 'bg-rose-100 text-rose-600')}`}>
+                          <Radio size={28} strokeWidth={2} />
+                        </div>
+                        <div>
+                          <h3 className={`text-2xl font-black tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{device.id}</h3>
+                          <p className={`text-xs font-bold tracking-widest uppercase mt-1 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>{device.serial}</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className={`space-y-4 flex-1 py-6 border-y border-dashed ${theme === 'dark' ? 'border-white/10' : 'border-slate-200'}`}>
+                      <div className="flex justify-between items-center">
+                        <span className={`text-sm font-medium ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>รุ่น (Model)</span>
+                        <span className={`text-sm font-bold tracking-wide ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{device.model}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className={`text-sm font-medium ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>สถานะ</span>
+                        {getStatusBadge(device.status)}
+                      </div>
+                      {device.status === 'borrowed' && (
+                        <div className={`mt-4 p-4 rounded-2xl flex flex-col justify-between space-y-2 border ${theme === 'dark' ? 'bg-black/20 border-white/5' : 'bg-slate-50 border-slate-100'}`}>
+                          <span className={`text-xs font-bold tracking-wide uppercase ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>ผู้ถือครองปัจจุบัน</span>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center text-[10px] font-black text-white">
+                              {device.assignedTo.charAt(0)}
+                            </div>
+                            <span className={`text-sm font-black ${theme === 'dark' ? 'text-amber-400' : 'text-amber-600'}`}>{device.assignedTo}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex space-x-3 mt-6">
+                      {device.status !== 'borrowed' && (
+                        <button 
+                          onClick={() => updateStatus(device.id, device.status === 'maintenance' ? 'available' : 'maintenance')}
+                          className={`flex-1 py-3.5 rounded-xl text-sm font-bold transition-all active:scale-95 border ${
+                            device.status === 'maintenance' 
+                              ? (theme === 'dark' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100') 
+                              : (theme === 'dark' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20' : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100')
+                          }`}
+                        >
+                          {device.status === 'maintenance' ? 'พร้อมใช้งาน' : 'แจ้งส่งซ่อม'}
+                        </button>
+                      )}
+                      {device.status === 'borrowed' && (
+                        <button disabled className={`flex-1 py-3.5 rounded-xl text-sm font-bold tracking-wide cursor-not-allowed border ${theme === 'dark' ? 'bg-white/5 text-slate-500 border-white/5' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
+                          In Use
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        }
+
+        function EmployeesView({ employees, onAddEmployee, theme }) {
+          const [searchTerm, setSearchTerm] = useState('');
+          const [isAdding, setIsAdding] = useState(false);
+          const [newId, setNewId] = useState('');
+          const [newName, setNewName] = useState('');
+          const [newDept, setNewDept] = useState('');
+          const [newPhone, setNewPhone] = useState('');
+
+          const filteredEmployees = employees.filter(e => 
+            e.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            e.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            e.department.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+
+          const handleSaveEmployee = (e) => {
+            e.preventDefault();
+            if(employees.find(emp => emp.id === newId)) return alert('รหัสพนักงานนี้มีในระบบแล้ว!');
+            onAddEmployee({ id: newId, name: newName, department: newDept, phone: newPhone });
+            setIsAdding(false);
+            setNewId(''); setNewName(''); setNewDept(''); setNewPhone('');
+          };
+
+          return (
+            <div className="space-y-10 animate-in fade-in duration-500 relative">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                <div className="relative flex-1 max-w-xl group">
+                  <Search className={`absolute left-5 top-1/2 transform -translate-y-1/2 transition-colors ${theme === 'dark' ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-400 group-focus-within:text-indigo-600'}`} size={22} />
+                  <input 
+                    type="text" 
+                    placeholder="ค้นหาชื่อพนักงาน, รหัส, หรือแผนก..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className={`w-full pl-14 pr-6 py-4.5 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 border transition-all shadow-sm font-bold text-lg ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white placeholder:text-slate-600' : 'bg-white/80 border-slate-200/60 text-slate-800 placeholder:text-slate-400'}`}
+                  />
+                </div>
+                <button 
+                  onClick={() => setIsAdding(!isAdding)}
+                  className={`px-8 py-4.5 rounded-2xl font-black tracking-wide flex items-center justify-center space-x-3 transition-all duration-300 shadow-xl hover:-translate-y-1 active:scale-95 overflow-hidden relative group ${
+                    isAdding 
+                      ? theme === 'dark' ? 'bg-white/10 text-slate-200 border border-white/10' : 'bg-slate-800 text-white'
+                      : 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white border border-indigo-500/30'
+                  }`}
+                >
+                  {!isAdding && <div className="absolute inset-0 bg-white/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />}
+                  {isAdding ? <X size={20} className="relative z-10" /> : <UserPlus size={22} strokeWidth={3} className="relative z-10" />}
+                  <span className="relative z-10">{isAdding ? 'ปิดหน้าต่าง' : 'เพิ่มบุคลากร'}</span>
+                </button>
+              </div>
+
+              {isAdding && (
+                <div className={`rounded-[2.5rem] border backdrop-blur-xl p-8 md:p-10 animate-in slide-in-from-top-10 duration-700 shadow-2xl ${theme === 'dark' ? 'bg-indigo-900/10 border-indigo-500/20 shadow-indigo-900/20' : 'bg-indigo-50/50 border-indigo-100 shadow-indigo-100/50'}`}>
+                  <h3 className={`text-2xl font-black mb-8 flex items-center tracking-tight ${theme === 'dark' ? 'text-indigo-400' : 'text-indigo-700'}`}>
+                    <div className={`p-2 rounded-xl mr-4 ${theme === 'dark' ? 'bg-indigo-500/20' : 'bg-indigo-100'}`}><UserPlus size={24} strokeWidth={3}/></div>
+                    เพิ่มข้อมูลบุคลากรใหม่
+                  </h3>
+                  <form onSubmit={handleSaveEmployee} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                      <label className={`block text-sm font-bold tracking-wide mb-3 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>รหัสพนักงาน (ID) <span className="text-rose-500">*</span></label>
+                      <input type="text" required value={newId} onChange={e => setNewId(e.target.value)} placeholder="เช่น EMP-005" className={`w-full rounded-2xl p-4 outline-none focus:ring-4 focus:ring-indigo-500/20 border transition-all font-bold ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white focus:border-indigo-500/50' : 'bg-white border-slate-200 text-slate-800 focus:border-indigo-500'}`} />
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-bold tracking-wide mb-3 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>ชื่อ-นามสกุล <span className="text-rose-500">*</span></label>
+                      <input type="text" required value={newName} onChange={e => setNewName(e.target.value)} placeholder="ระบุชื่อพนักงาน" className={`w-full rounded-2xl p-4 outline-none focus:ring-4 focus:ring-indigo-500/20 border transition-all font-bold ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white focus:border-indigo-500/50' : 'bg-white border-slate-200 text-slate-800 focus:border-indigo-500'}`} />
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-bold tracking-wide mb-3 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>แผนก/ฝ่าย <span className="text-rose-500">*</span></label>
+                      <input type="text" required value={newDept} onChange={e => setNewDept(e.target.value)} placeholder="เช่น ซ่อมบำรุง, รปภ." className={`w-full rounded-2xl p-4 outline-none focus:ring-4 focus:ring-indigo-500/20 border transition-all font-bold ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white focus:border-indigo-500/50' : 'bg-white border-slate-200 text-slate-800 focus:border-indigo-500'}`} />
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-bold tracking-wide mb-3 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>เบอร์โทรศัพท์ติดต่อ</label>
+                      <input type="text" value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="08x-xxx-xxxx" className={`w-full rounded-2xl p-4 outline-none focus:ring-4 focus:ring-indigo-500/20 border transition-all font-bold ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white focus:border-indigo-500/50' : 'bg-white border-slate-200 text-slate-800 focus:border-indigo-500'}`} />
+                    </div>
+                    <div className="md:col-span-2 flex justify-end mt-4">
+                      <button type="submit" className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white px-10 py-4 rounded-2xl font-black tracking-wide hover:shadow-lg hover:shadow-indigo-500/30 flex items-center transition-all hover:-translate-y-1 active:scale-95 border border-indigo-500/30">
+                        <Save size={20} className="mr-3"/> บันทึกข้อมูลบุคลากร
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              <div className={`rounded-[2.5rem] border backdrop-blur-xl overflow-hidden shadow-2xl ${theme === 'dark' ? 'bg-white/5 border-white/10 shadow-black/50' : 'bg-white/80 border-white shadow-slate-200/50'}`}>
+                <div className="overflow-x-auto p-4">
+                  <table className="w-full text-left border-collapse min-w-[800px]">
+                    <thead>
+                      <tr className={`text-xs tracking-widest uppercase font-bold ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                        <th className="p-5 rounded-l-2xl w-32">รหัส</th>
+                        <th className="p-5">ข้อมูลบุคลากร</th>
+                        <th className="p-5">แผนก/ฝ่าย</th>
+                        <th className="p-5">เบอร์โทรศัพท์</th>
+                        <th className="p-5 rounded-r-2xl text-right">จัดการ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredEmployees.map((emp) => (
+                        <tr key={emp.id} className={`group transition-all duration-300 hover:-translate-y-0.5 ${theme === 'dark' ? 'hover:bg-white/[0.03]' : 'hover:bg-slate-50'}`}>
+                          <td className={`p-5 font-black tracking-wider rounded-l-2xl ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{emp.id}</td>
+                          <td className="p-5">
+                            <div className="flex items-center space-x-4">
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm ${theme === 'dark' ? 'bg-gradient-to-br from-indigo-500/20 to-blue-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-gradient-to-br from-indigo-100 to-blue-50 text-indigo-700 border border-indigo-100'}`}>
+                                {emp.name.charAt(0)}
+                              </div>
+                              <span className={`font-black ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{emp.name}</span>
+                            </div>
+                          </td>
+                          <td className="p-5">
+                            <span className={`px-4 py-2 rounded-xl text-xs font-bold tracking-wide border ${theme === 'dark' ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                              {emp.department}
+                            </span>
+                          </td>
+                          <td className={`p-5 font-medium tracking-wider ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>{emp.phone || '-'}</td>
+                          <td className="p-5 text-right space-x-2 rounded-r-2xl">
+                            <button className={`p-2.5 rounded-xl transition-colors ${theme === 'dark' ? 'text-slate-500 hover:text-indigo-400 hover:bg-slate-800' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}><Edit size={20}/></button>
+                            <button className={`p-2.5 rounded-xl transition-colors ${theme === 'dark' ? 'text-slate-500 hover:text-rose-400 hover:bg-slate-800' : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'}`}><Trash2 size={20}/></button>
+                          </td>
+                        </tr>
+                      ))}
+                      {filteredEmployees.length === 0 && (
+                        <tr>
+                          <td colSpan="5" className="p-16 text-center">
+                            <div className="flex flex-col items-center justify-center text-slate-500">
+                              <Users size={48} className="mb-4 opacity-20" />
+                              <p className="text-lg font-bold">ไม่พบรายชื่อบุคลากร</p>
+                              <p className="text-sm mt-1">ลองเปลี่ยนคำค้นหา หรือเพิ่มข้อมูลใหม่</p>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        function ReportsView({ transactions, employees, devices, theme }) {
+          const [startDate, setStartDate] = useState('');
+          const [endDate, setEndDate] = useState('');
+          const [reportSearch, setReportSearch] = useState('');
+
+          const filteredTransactions = useMemo(() => {
+            return transactions.filter(t => {
+              const tDate = new Date(t.timestamp);
+              const sDate = startDate ? new Date(startDate) : null;
+              const eDate = endDate ? new Date(endDate) : null;
+              
+              if (eDate) eDate.setHours(23, 59, 59, 999);
+
+              if (sDate && tDate < sDate) return false;
+              if (eDate && tDate > eDate) return false;
+
+              if (reportSearch) {
+                const empName = employees.find(e => e.id === t.employeeId)?.name || '';
+                const searchLower = reportSearch.toLowerCase();
+                if (
+                  !t.deviceId.toLowerCase().includes(searchLower) &&
+                  !empName.toLowerCase().includes(searchLower) &&
+                  !(t.note || '').toLowerCase().includes(searchLower) &&
+                  !(t.location || '').toLowerCase().includes(searchLower)
+                ) {
+                  return false;
+                }
+              }
+
+              return true;
+            });
+          }, [transactions, startDate, endDate, reportSearch, employees]);
+
+          const exportFilteredCSV = () => {
+            if (filteredTransactions.length === 0) return alert('ไม่มีข้อมูลสำหรับส่งออกตามเงื่อนไขที่เลือก');
+            
+            const dataToExport = filteredTransactions.map(t => {
+              const emp = employees.find(e => e.id === t.employeeId);
+              return {
+                'วันที่': new Date(t.timestamp).toLocaleDateString('th-TH'),
+                'เวลา': new Date(t.timestamp).toLocaleTimeString('th-TH'),
+                'รายการ': t.type === 'borrow' ? 'เบิกใช้งาน' : t.type === 'maintenance' ? 'แจ้งซ่อม' : 'คืนอุปกรณ์',
+                'รหัสเครื่อง': t.deviceId,
+                'ผู้ทำรายการ': emp ? emp.name : '-',
+                'สถานที่': t.location || '-',
+                'หมายเหตุ': t.note || '-'
+              };
+            });
+
+            const headers = Object.keys(dataToExport[0]).join(',');
+            const rows = dataToExport.map(obj => 
+              Object.values(obj).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+            ).join('\n');
+            
+            const csv = `${headers}\n${rows}`;
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Report_${startDate || 'All'}_to_${endDate || 'All'}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+          };
+
+          return (
+            <div className="space-y-10 animate-in fade-in duration-500 relative">
+              <div className={`rounded-[2.5rem] border backdrop-blur-xl p-8 shadow-2xl ${theme === 'dark' ? 'bg-indigo-900/10 border-indigo-500/20 shadow-indigo-900/20' : 'bg-white/80 border-slate-200/60 shadow-slate-200/50'}`}>
+                <div className="flex items-center mb-6">
+                  <div className={`p-2.5 rounded-xl mr-4 ${theme === 'dark' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-100 text-indigo-600'}`}>
+                    <CalendarDays size={24} strokeWidth={2.5}/>
+                  </div>
+                  <h2 className={`text-2xl font-black tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>เงื่อนไขการค้นหารายงาน</h2>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <div className="md:col-span-1">
+                    <label className={`block text-sm font-bold tracking-wide mb-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>ตั้งแต่วันที่</label>
+                    <input 
+                      type="date" 
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className={`w-full rounded-2xl p-4 outline-none focus:ring-4 focus:ring-indigo-500/20 border transition-all font-bold ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white focus:border-indigo-500/50' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-indigo-500'}`} 
+                    />
+                  </div>
+                  <div className="md:col-span-1">
+                    <label className={`block text-sm font-bold tracking-wide mb-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>ถึงวันที่</label>
+                    <input 
+                      type="date" 
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className={`w-full rounded-2xl p-4 outline-none focus:ring-4 focus:ring-indigo-500/20 border transition-all font-bold ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white focus:border-indigo-500/50' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-indigo-500'}`} 
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className={`block text-sm font-bold tracking-wide mb-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>ค้นหาเพิ่มเติม (รหัส, ชื่อ, สถานที่)</label>
+                    <div className="relative">
+                      <Search className={`absolute left-4 top-1/2 transform -translate-y-1/2 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} size={20} />
+                      <input 
+                        type="text" 
+                        value={reportSearch}
+                        onChange={(e) => setReportSearch(e.target.value)}
+                        placeholder="ระบุคำค้นหา..."
+                        className={`w-full pl-12 pr-4 py-4 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/20 border transition-all font-bold ${theme === 'dark' ? 'bg-white/5 border-white/10 text-white focus:border-indigo-500/50 placeholder:text-slate-600' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-indigo-500 placeholder:text-slate-400'}`} 
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className={`rounded-[2.5rem] border backdrop-blur-xl overflow-hidden shadow-2xl ${theme === 'dark' ? 'bg-white/5 border-white/10 shadow-black/50' : 'bg-white/80 border-white shadow-slate-200/50'}`}>
+                <div className={`p-8 border-b flex justify-between items-center flex-wrap gap-4 ${theme === 'dark' ? 'border-white/5' : 'border-slate-100'}`}>
+                  <h2 className="text-xl font-black flex items-center space-x-3">
+                    <span className={theme === 'dark' ? 'text-white' : 'text-slate-800'}>ผลลัพธ์การค้นหา: {filteredTransactions.length} รายการ</span>
+                  </h2>
+                  <button 
+                    onClick={exportFilteredCSV}
+                    className={`px-6 py-3 rounded-2xl font-bold flex items-center justify-center space-x-2 transition-all shadow-lg active:scale-95 ${theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
+                  >
+                    <Download size={20} strokeWidth={2.5}/>
+                    <span>Export เป็น CSV</span>
+                  </button>
+                </div>
+                <div className="overflow-x-auto p-4">
+                  <table className="w-full text-left border-collapse min-w-[900px]">
+                    <thead>
+                      <tr className={`text-xs tracking-widest uppercase font-bold ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                        <th className="p-4 rounded-l-2xl">วัน-เวลา</th>
+                        <th className="p-4">รายการ</th>
+                        <th className="p-4">รหัสเครื่อง</th>
+                        <th className="p-4">ผู้ทำรายการ</th>
+                        <th className="p-4">สถานที่</th>
+                        <th className="p-4 rounded-r-2xl">หมายเหตุ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredTransactions.map((t) => {
+                        const emp = employees.find(e => e.id === t.employeeId);
+                        const isBorrow = t.type === 'borrow';
+                        const isMaintenance = t.type === 'maintenance';
+                        return (
+                          <tr key={t.id} className={`group transition-all duration-300 hover:-translate-y-0.5 ${theme === 'dark' ? 'hover:bg-white/[0.03]' : 'hover:bg-slate-50'}`}>
+                            <td className={`p-4 font-medium rounded-l-2xl ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>
+                              {new Date(t.timestamp).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}
+                            </td>
+                            <td className="p-4">
+                              <span className={`inline-flex items-center px-4 py-1.5 rounded-xl text-xs font-black tracking-wide border ${
+                                isMaintenance ? (theme==='dark' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-rose-50 text-rose-700 border-rose-200') : 
+                                isBorrow ? (theme==='dark' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200') : 
+                                (theme==='dark' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200')
+                              }`}>
+                                {isMaintenance ? 'แจ้งซ่อม' : isBorrow ? 'เบิกใช้งาน' : 'คืนอุปกรณ์'}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className={`font-black tracking-wide ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>{t.deviceId}</span>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex items-center space-x-3">
+                                {emp && (
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${theme === 'dark' ? 'bg-indigo-500/20 text-indigo-300' : 'bg-indigo-100 text-indigo-700'}`}>
+                                    {emp.name.charAt(0)}
+                                  </div>
+                                )}
+                                <span className={`font-bold ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{emp ? emp.name : '-'}</span>
+                              </div>
+                            </td>
+                            <td className={`p-4 font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{t.location || '-'}</td>
+                            <td className={`p-4 text-sm font-medium rounded-r-2xl ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>{t.note || '-'}</td>
+                          </tr>
+                        );
+                      })}
+                      {filteredTransactions.length === 0 && (
+                        <tr>
+                          <td colSpan="6" className="p-16 text-center text-slate-500">
+                            <div className="flex flex-col items-center justify-center space-y-3">
+                              <FileText size={48} className="opacity-20 mb-2" />
+                              <p className="text-lg font-bold">ไม่พบข้อมูลตามเงื่อนไขที่ค้นหา</p>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        function DataManagementView({ devices, setDevices, employees, setEmployees, transactions, setTransactions, theme }) {
+          const fileInputRef = useRef(null);
+
+          const exportToCSV = (data, filename) => {
+            if (!data || data.length === 0) return alert('ไม่มีข้อมูลสำหรับส่งออก');
+            const headers = Object.keys(data[0]).join(',');
+            const rows = data.map(obj => 
+              Object.values(obj).map(v => {
+                let value = v === null || v === undefined ? '' : String(v);
+                return `"${value.replace(/"/g, '""')}"`;
+              }).join(',')
+            ).join('\n');
+            
+            const csv = `${headers}\n${rows}`;
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${filename}_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+          };
+
+          const exportToJSON = () => {
+            const dataToExport = { devices, employees, transactions };
+            const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `CommsControl_Backup_${new Date().toISOString().slice(0,10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+          };
+
+          const handleImportJSON = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              try {
+                const importedData = JSON.parse(event.target.result);
+                let confirmMsg = 'พบข้อมูลในไฟล์\n';
+                if (importedData.devices) confirmMsg += `- อุปกรณ์ ${importedData.devices.length} รายการ\n`;
+                if (importedData.employees) confirmMsg += `- พนักงาน ${importedData.employees.length} รายการ\n`;
+                if (importedData.transactions) confirmMsg += `- ประวัติ ${importedData.transactions.length} รายการ\n`;
+                confirmMsg += '\nคุณต้องการกู้คืนข้อมูลเหล่านี้ทับข้อมูลปัจจุบันหรือไม่?';
+
+                if (window.confirm(confirmMsg)) {
+                  if (importedData.devices) setDevices(importedData.devices);
+                  if (importedData.employees) setEmployees(importedData.employees);
+                  if (importedData.transactions) setTransactions(importedData.transactions);
+                  alert('กู้คืนข้อมูลสำเร็จ!');
+                }
+              } catch (error) {
+                alert('เกิดข้อผิดพลาด: ไฟล์ที่นำเข้าไม่ใช่รูปแบบ JSON ที่ถูกต้อง');
+              }
+              if(fileInputRef.current) fileInputRef.current.value = '';
+            };
+            reader.readAsText(file);
+          };
+
+          return (
+            <div className="space-y-10 animate-in fade-in duration-500">
+              <div className={`rounded-[2.5rem] shadow-2xl border p-10 backdrop-blur-xl ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-white/80 border-white'}`}>
+                <div className="flex items-center mb-6">
+                  <div className={`p-4 rounded-2xl mr-5 ${theme === 'dark' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-100 text-indigo-600'}`}>
+                    <Database size={32} strokeWidth={2} />
+                  </div>
+                  <div>
+                    <h2 className={`text-3xl font-black tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                      สำรองและกู้คืนฐานข้อมูล (JSON)
+                    </h2>
+                    <p className={`text-base font-medium mt-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>ดาวน์โหลดโครงสร้างทั้งหมดเพื่อเก็บเป็นข้อมูลสำรอง หรือย้ายไปยังอุปกรณ์อื่น</p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-10">
+                  <button 
+                    onClick={exportToJSON}
+                    className={`flex items-center justify-center space-x-3 py-6 rounded-3xl font-bold text-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl active:scale-95 ${theme === 'dark' ? 'bg-indigo-600/20 text-indigo-300 border-2 border-indigo-500/30 hover:bg-indigo-600/30 hover:shadow-indigo-900/50' : 'bg-indigo-50 text-indigo-700 border-2 border-indigo-100 hover:bg-indigo-100 hover:shadow-indigo-100'}`}
+                  >
+                    <Download size={24} />
+                    <span>ดาวน์โหลด Backup (.json)</span>
+                  </button>
+
+                  <div className="relative">
+                    <input type="file" accept=".json" ref={fileInputRef} onChange={handleImportJSON} className="hidden" id="import-json" />
+                    <label 
+                      htmlFor="import-json"
+                      className={`flex items-center justify-center space-x-3 border-2 border-dashed py-6 rounded-3xl font-bold text-lg transition-all duration-300 cursor-pointer w-full hover:-translate-y-1 active:scale-95 ${theme === 'dark' ? 'border-slate-600 text-slate-300 hover:border-slate-400 hover:bg-slate-800/50' : 'border-slate-300 text-slate-600 hover:border-slate-400 hover:bg-slate-50'}`}
+                    >
+                      <Upload size={24} />
+                      <span>อัปโหลด Restore (.json)</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className={`rounded-[2.5rem] shadow-2xl border p-10 backdrop-blur-xl ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-white/80 border-white'}`}>
+                 <div className="flex items-center mb-6">
+                  <div className={`p-4 rounded-2xl mr-5 ${theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-600'}`}>
+                    <FileText size={32} strokeWidth={2} />
+                  </div>
+                  <div>
+                    <h2 className={`text-3xl font-black tracking-tight ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                      ส่งออกข้อมูลตาราง (CSV)
+                    </h2>
+                    <p className={`text-base font-medium mt-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>ส่งออกแบบแยกส่วน เพื่อนำไปวิเคราะห์ต่อใน Microsoft Excel หรือระบบอื่นๆ</p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-10">
+                  <button onClick={() => exportToCSV(devices, 'Devices_Data')} className={`flex items-center justify-center space-x-3 border-2 py-5 rounded-3xl font-bold text-base transition-all duration-300 hover:-translate-y-1 active:scale-95 ${theme === 'dark' ? 'border-emerald-500/30 text-emerald-400 hover:bg-emerald-900/20' : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'}`}>
+                    <FileBarChart size={22} /><span>ข้อมูลอุปกรณ์</span>
+                  </button>
+                  <button onClick={() => exportToCSV(employees, 'Employees_Data')} className={`flex items-center justify-center space-x-3 border-2 py-5 rounded-3xl font-bold text-base transition-all duration-300 hover:-translate-y-1 active:scale-95 ${theme === 'dark' ? 'border-emerald-500/30 text-emerald-400 hover:bg-emerald-900/20' : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'}`}>
+                    <FileBarChart size={22} /><span>ข้อมูลบุคลากร</span>
+                  </button>
+                  <button onClick={() => exportToCSV(transactions, 'Transactions_Data')} className={`flex items-center justify-center space-x-3 border-2 py-5 rounded-3xl font-bold text-base transition-all duration-300 hover:-translate-y-1 active:scale-95 ${theme === 'dark' ? 'border-emerald-500/30 text-emerald-400 hover:bg-emerald-900/20' : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'}`}>
+                    <FileBarChart size={22} /><span>ประวัติทั้งหมด</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // 3. Mount React App
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
