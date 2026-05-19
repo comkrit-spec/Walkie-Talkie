@@ -3,10 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CommsControl - ระบบจัดการวิทยุสื่อสารระดับองค์กร</title>
+    <title>CommsControl - ระบบจัดการวิทยุสื่อสาร</title>
+    
     <meta name="theme-color" content="#060913">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+
     <style>
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -15,7 +20,10 @@
         .hide-scroll::-webkit-scrollbar { display: none; }
         
         .fade-in { animation: fadeIn 0.4s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
 
         body.light-theme { background-color: #f8fafc; color: #0f172a; }
         body.light-theme .bg-panel { background-color: #ffffff; border-color: #e2e8f0; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05); }
@@ -35,12 +43,16 @@
     </style>
 </head>
 <body class="font-sans transition-colors duration-500 overflow-hidden" id="body-tag">
+    
     <div class="fixed top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-600/15 blur-[140px] pointer-events-none z-0"></div>
     <div class="fixed bottom-[-10%] right-[-5%] w-[40%] h-[50%] rounded-full bg-purple-600/15 blur-[140px] pointer-events-none z-0"></div>
 
     <div id="app-root" class="min-h-screen w-full relative z-10"></div>
 
     <script>
+        // ==========================================
+        // 1. STATE & MOCK DATA
+        // ==========================================
         const state = {
             isLoggedIn: sessionStorage.getItem('comms_logged_in') === 'true',
             user: JSON.parse(sessionStorage.getItem('comms_user')) || null,
@@ -57,12 +69,15 @@
 
         const fallbackData = {
             devices: [
-                { id: 'R-001', model: 'Motorola CP200d', serial: 'S/N-9901', status: 'available' },
-                { id: 'R-002', model: 'Motorola CP200d', serial: 'S/N-9902', status: 'borrowed', assignedTo: 'EMP-001' }
+                { id: 'R-001', model: 'Motorola CP200d', serial: 'S/N-9901', status: 'available', assignedTo: '' },
+                { id: 'R-002', model: 'Motorola CP200d', serial: 'S/N-9902', status: 'borrowed', assignedTo: 'EMP-001' },
+                { id: 'R-003', model: 'Icom IC-V80', serial: 'S/N-8801', status: 'maintenance', assignedTo: '' }
             ],
             employees: [
-                { id: 'EMP-001', name: 'สมชาย ใจกล้า', department: 'รักษาความปลอดภัย', phone: '081-111-1111' }
+                { id: 'EMP-001', name: 'สมชาย ใจกล้า', department: 'รักษาความปลอดภัย', phone: '081-111-1111' },
+                { id: 'EMP-002', name: 'วิชัย รักงาน', department: 'ช่างซ่อมบำรุง', phone: '082-222-2222' }
             ],
+            transactions: [],
             users: [
                 { username: 'admin', password: 'admin1234', role: 'ผู้ดูแลระบบ' },
                 { username: 'user', password: '1234', role: 'เจ้าหน้าที่' }
@@ -77,6 +92,9 @@
             { id: 'reports', icon: 'file-bar-chart', label: 'รายงาน' }
         ];
 
+        // ==========================================
+        // 2. CORE APP ENGINE
+        // ==========================================
         const app = {
             init: function() {
                 this.applyTheme();
@@ -86,11 +104,10 @@
                     this.fetchData();
                     this.startAutoRefresh();
                 } else {
-                    this.fetchDataForLogin(); // ต้องดึง User มาก่อนถึงจะเช็คล็อกอินได้
+                    this.fetchDataForLogin();
                 }
             },
 
-            // ดึงข้อมูลก่อนล็อกอินเพื่อใช้เช็ค Username/Password จาก GAS
             fetchDataForLogin: async function() {
                 if (!state.gasUrl) {
                     state.users = fallbackData.users;
@@ -103,7 +120,7 @@
                     if (data.users) state.users = data.users;
                 } catch (e) {
                     console.error('Error fetching users:', e);
-                    state.users = fallbackData.users; // Fallback
+                    state.users = fallbackData.users;
                 }
                 this.renderLoginScreen();
             },
@@ -113,7 +130,6 @@
                 const user = document.getElementById('login-user').value.trim();
                 const pass = document.getElementById('login-pass').value;
 
-                // ตรวจสอบจากฐานข้อมูล Users แบบไดนามิก
                 const foundUser = state.users.find(u => u.username === user && u.password === pass);
 
                 if (foundUser) {
@@ -163,10 +179,11 @@
                     if(state.devices.length === 0) {
                         state.devices = fallbackData.devices;
                         state.employees = fallbackData.employees;
+                        state.transactions = fallbackData.transactions;
                         state.users = fallbackData.users;
                     }
                     this.updateStatus('Local Mode', 'amber');
-                    this.switchView(state.currentView);
+                    if(!isBackground) this.renderCurrentView();
                     return;
                 }
                 if(!isBackground) this.updateStatus('Syncing...', 'spin');
@@ -179,10 +196,9 @@
                     if (data.users) state.users = data.users;
                     this.updateStatus('Online', 'emerald');
                 } catch (error) {
-                    console.error("Fetch Error:", error);
                     this.updateStatus('Error Connecting', 'rose');
                 } finally {
-                    if(state.currentView !== 'settings') this.renderCurrentView();
+                    if(!isBackground && state.currentView !== 'settings') this.renderCurrentView();
                 }
             },
 
@@ -213,7 +229,7 @@
                 state.theme = state.theme === 'dark' ? 'light' : 'dark';
                 localStorage.setItem('comms_theme', state.theme);
                 this.applyTheme();
-                if(state.currentView === 'settings') this.renderCurrentView(); // re-render if in settings
+                if(state.currentView === 'settings') this.renderCurrentView();
             },
 
             updateStatus: function(text, color) {
@@ -292,10 +308,10 @@
                 const footer = document.getElementById('nav-footer');
                 const isSettings = state.currentView === 'settings';
                 footer.innerHTML = `
-                    <button onclick="app.switchView('settings')" class="w-full flex items-center space-x-3 px-5 py-3.5 rounded-xl transition-all hover:item ${isSettings ? 'text-indigo-500 font-bold bg-indigo-500/5' : 'text-slate-400'}">
+                    <button onclick="app.switchView('settings')" class="w-full flex items-center space-x-3 px-5 py-3.5 rounded-xl transition-all hover-item ${isSettings ? 'text-indigo-500 font-bold bg-indigo-500/5' : 'text-slate-400'}">
                         <i data-lucide="settings" class="w-5 h-5"></i> <span class="text-sm">ตั้งค่าระบบ</span>
                     </button>
-                    <button onclick="app.toggleTheme()" class="w-full flex items-center space-x-3 px-5 py-3.5 rounded-xl transition-all hover:item text-slate-400 mt-1">
+                    <button onclick="app.toggleTheme()" class="w-full flex items-center space-x-3 px-5 py-3.5 rounded-xl transition-all hover-item text-slate-400 mt-1">
                         <i data-lucide="${state.theme === 'dark' ? 'sun' : 'moon'}" class="w-5 h-5"></i> <span class="text-sm">${state.theme === 'dark' ? 'โหมดสว่าง' : 'โหมดมืด'}</span>
                     </button>
                     <button onclick="app.handleLogout()" class="w-full flex items-center space-x-3 px-5 py-3.5 rounded-xl transition-all hover:text-rose-500 text-slate-500 border-t border-slate-500/10 mt-2 pt-3">
@@ -324,50 +340,157 @@
         // ==========================================
         // 3. ACTION HANDLERS
         // ==========================================
-        // [ย่อส่วนฟังก์ชันเบิก-คืน อุปกรณ์ เพื่อประหยัดพื้นที่ ... โค้ดส่วนนี้ยังทำงานเหมือนเดิม]
         function setTransType(type) { state.transForm.type = type; state.transForm.selectedDevices = []; app.renderCurrentView(); }
-        function toggleDeviceSelect(id) { const idx = state.transForm.selectedDevices.indexOf(id); if(idx > -1) state.transForm.selectedDevices.splice(idx,1); else state.transForm.selectedDevices.push(id); app.renderCurrentView(); }
+        function toggleDeviceSelect(id) { 
+            const idx = state.transForm.selectedDevices.indexOf(id); 
+            if(idx > -1) state.transForm.selectedDevices.splice(idx,1); 
+            else state.transForm.selectedDevices.push(id); 
+            app.renderCurrentView(); 
+        }
+
         function handleTransaction(event) {
             event.preventDefault();
-            const { type, selectedDevices } = state.transForm;
+            const type = state.transForm.type;
+            const devs = state.transForm.selectedDevices;
+            
             const empInput = document.getElementById('trans-emp')?.value || '';
             const location = document.getElementById('trans-loc')?.value || '-';
             const note = document.getElementById('trans-note').value;
 
-            if (selectedDevices.length === 0) return alert('❌ กรุณาเลือกอุปกรณ์');
+            if (devs.length === 0) return alert('❌ กรุณาเลือกอุปกรณ์อย่างน้อย 1 รายการ');
+            
             let finalEmpId = empInput;
             if (type === 'borrow') {
-                if (!empInput) return alert('❌ ระบุผู้เบิก');
+                if (!empInput) return alert('❌ กรุณาระบุชื่อผู้เบิก');
                 if (empInput.includes(' - ')) finalEmpId = empInput.split(' - ')[0]; 
-                if (!location) return alert('❌ ระบุสถานที่');
+                if (!location) return alert('❌ กรุณาระบุสถานที่ใช้งาน');
             } else {
-                const activeDev = state.devices.find(x => x.id === selectedDevices[0]);
+                const activeDev = state.devices.find(x => x.id === devs[0]);
                 finalEmpId = activeDev?.assignedTo || '';
             }
 
             const timestamp = new Date().toISOString();
-            const newTrans = selectedDevices.map((devId, i) => ({ id: `T-${Date.now()}-${i}`, deviceId: devId, employeeId: type === 'borrow' ? finalEmpId : null, type, timestamp, note, location: type === 'borrow' ? location : '-' }));
+            const newTrans = devs.map((devId, i) => ({
+                id: `T-${Date.now()}-${i}`, deviceId: devId, employeeId: type === 'borrow' ? finalEmpId : null,
+                type, timestamp, note, location: type === 'borrow' ? location : '-'
+            }));
+
             state.transactions = [...newTrans, ...state.transactions];
             const updatedDevices = [];
             state.devices = state.devices.map(d => {
-                if (selectedDevices.includes(d.id)) {
+                if (devs.includes(d.id)) {
                     const updated = { ...d, status: type === 'borrow' ? 'borrowed' : 'available', assignedTo: type === 'borrow' ? finalEmpId : null };
                     updatedDevices.push(updated); return updated;
-                } return d;
+                }
+                return d;
             });
+
             app.syncData({ action: 'transaction', newTransactions: newTrans, updatedDevices });
             state.transForm = { type: 'borrow', selectedDevices: [] };
-            alert(`🎉 บันทึกสำเร็จ ${selectedDevices.length} เครื่อง`);
+            alert(`🎉 บันทึกรายการสำเร็จจำนวน ${devs.length} เครื่อง`);
             app.switchView('dashboard');
         }
 
-        // --- User Management Handlers ---
+        function submitDevice(e) {
+            e.preventDefault();
+            const id = document.getElementById('dev-id').value.toUpperCase().trim();
+            const model = document.getElementById('dev-model').value.trim();
+            const serial = document.getElementById('dev-sn').value.trim();
+
+            if (state.devices.find(d => d.id === id)) return alert('❌ รหัสอุปกรณ์นี้มีอยู่ในระบบคลังแล้วครับ');
+            const newDev = { id, model, serial, status: 'available', assignedTo: null };
+            state.devices.push(newDev);
+            app.syncData({ action: 'addDevice', newDevice: newDev });
+            alert('📥 เพิ่มวิทยุสื่อสารเข้าคลังเรียบร้อยครับ');
+            app.renderCurrentView();
+        }
+
+        function submitEmployee(e) {
+            e.preventDefault();
+            const id = document.getElementById('emp-id').value.toUpperCase().trim();
+            const name = document.getElementById('emp-name').value.trim();
+            const department = document.getElementById('emp-dept').value.trim();
+            const phone = document.getElementById('emp-phone').value.trim();
+
+            if (state.employees.find(x => x.id === id)) return alert('❌ รหัสพนักงานนี้มีอยู่แล้วครับ');
+            const newEmp = { id, name, department, phone };
+            state.employees.push(newEmp);
+            app.syncData({ action: 'addEmployee', newEmployee: newEmp });
+            alert('👤 ลงทะเบียนรายชื่อบุคลากรใหม่สำเร็จ');
+            app.renderCurrentView();
+        }
+
+        function changeDeviceStatus(id, targetStatus) {
+            let note = '-';
+            if(targetStatus === 'maintenance') {
+                note = prompt('🛠️ กรุณาระบุอาการเสีย/ปัญหาการใช้งาน:');
+                if(!note) return; 
+            }
+            const newTrans = { id: `M-${Date.now()}`, deviceId: id, employeeId: null, type: targetStatus, timestamp: new Date().toISOString(), note: targetStatus==='maintenance'?`แจ้งซ่อม: ${note}`:'ช่างตรวจสภาพและปลดล็อกเครื่อง', location: '-' };
+            state.transactions.unshift(newTrans);
+            state.devices = state.devices.map(d => d.id === id ? { ...d, status: targetStatus, assignedTo: null } : d);
+            app.syncData({ action: 'transaction', newTransactions: [newTrans], updatedDevices: [{ id, status: targetStatus, assignedTo: '' }] });
+            app.renderCurrentView();
+        }
+
+        function executeExportCSV() {
+            const start = document.getElementById('rep-start').value;
+            const end = document.getElementById('rep-end').value;
+            let filtered = state.transactions;
+            
+            if(start) filtered = filtered.filter(t => t.timestamp >= start);
+            if(end) {
+                const eDate = new Date(end); eDate.setHours(23,59,59);
+                filtered = filtered.filter(t => new Date(t.timestamp) <= eDate);
+            }
+            if(filtered.length === 0) return alert('ไม่มีข้อมูลในช่วงเวลาที่ระบุ');
+
+            const rows = filtered.map(t => {
+                const emp = state.employees.find(e => e.id === t.employeeId);
+                const typeLabel = t.type==='borrow'?'เบิก':t.type==='maintenance'?'ซ่อม':'คืน';
+                return `"${new Date(t.timestamp).toLocaleString('th-TH')}","${typeLabel}","${t.deviceId}","${emp?emp.name:'-'}","${t.location||'-'}","${t.note||'-'}"`;
+            });
+            const csv = `\ufeff"วัน-เวลา","รายการ","รหัสเครื่อง","ผู้ทำรายการ","สถานที่","หมายเหตุ"\n` + rows.join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `CommsControl_Report_${Date.now()}.csv`; a.click();
+        }
+
+        function exportBackupJSON() {
+            const backup = { devices: state.devices, employees: state.employees, transactions: state.transactions, users: state.users };
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `CommsControl_Backup_${new Date().toISOString().slice(0,10)}.json`; a.click();
+        }
+
+        function importBackupJSON(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                try {
+                    const data = JSON.parse(evt.target.result);
+                    if(confirm(`⚠️ ยืนยันการกู้คืนข้อมูลทับข้อมูลปัจจุบัน?\n- วิทยุ ${data.devices?.length || 0} เครื่อง\n- บุคลากร ${data.employees?.length || 0} คน`)) {
+                        if(data.devices) state.devices = data.devices;
+                        if(data.employees) state.employees = data.employees;
+                        if(data.transactions) state.transactions = data.transactions;
+                        if(data.users) state.users = data.users;
+                        alert('✅ กู้คืนข้อมูลเข้าระบบ Local สำเร็จ!');
+                        app.renderCurrentView();
+                    }
+                } catch(err) { alert('❌ รูปแบบไฟล์ไม่ถูกต้อง'); }
+            };
+            reader.readAsText(file);
+        }
+
         function saveDatabaseSettings(e) {
             e.preventDefault();
             const url = document.getElementById('setting-url').value.trim();
             state.gasUrl = url;
             localStorage.setItem('comms_gas_url', url);
-            alert('💾 บันทึกการตั้งค่าระบบเรียบร้อย');
+            alert('💾 บันทึกการเชื่อมต่อฐานข้อมูลเรียบร้อย ระบบกำลังซิงค์ข้อมูลใหม่...');
             app.fetchData();
         }
 
@@ -378,16 +501,14 @@
             const role = document.getElementById('sys-role').value;
 
             if (state.userForm.isEditing) {
-                // อัปเดต
                 state.users = state.users.map(u => u.username === state.userForm.oldUsername ? { username: user, password: pass, role } : u);
             } else {
-                // เพิ่มใหม่
                 if (state.users.find(u => u.username === user)) return alert('❌ Username นี้มีคนใช้งานแล้ว');
                 state.users.push({ username: user, password: pass, role });
             }
             
             app.syncData({ action: 'syncUsers', users: state.users });
-            state.userForm = { isEditing: false, oldUsername: '' }; // Reset
+            state.userForm = { isEditing: false, oldUsername: '' }; 
             app.renderCurrentView();
             alert('👤 บันทึกข้อมูลผู้ใช้เรียบร้อย');
         }
@@ -397,7 +518,6 @@
             if (!user) return;
             state.userForm = { isEditing: true, oldUsername: user.username };
             app.renderCurrentView();
-            // หน่วงเวลารอ Render เสร็จแล้วยัดค่ากลับเข้า Form
             setTimeout(() => {
                 document.getElementById('sys-username').value = user.username;
                 document.getElementById('sys-password').value = user.password;
@@ -418,7 +538,7 @@
         }
 
         // ==========================================
-        // 4. VIEWS TEMPLATE SYSTEM
+        // 4. HTML VIEWS
         // ==========================================
         const views = {
             login: () => `
@@ -430,17 +550,9 @@
                             <p class="text-sm font-medium text-secondary mt-1">ลงชื่อเข้าใช้งานระบบเพื่อควบคุมอุปกรณ์</p>
                         </div>
                         <form onsubmit="app.handleLogin(event)" class="space-y-5 relative z-10">
-                            <div>
-                                <label class="block text-xs font-bold uppercase tracking-wider mb-2 text-secondary">Username</label>
-                                <input type="text" id="login-user" required placeholder="ชื่อผู้ใช้งาน..." class="w-full p-4 rounded-xl input-field border outline-none focus:border-indigo-500 font-bold">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold uppercase tracking-wider mb-2 text-secondary">Password</label>
-                                <input type="password" id="login-pass" required placeholder="••••••••" class="w-full p-4 rounded-xl input-field border outline-none focus:border-indigo-500 font-bold">
-                            </div>
-                            <button type="submit" class="w-full py-4 rounded-xl font-black tracking-wide text-white bg-gradient-to-r from-indigo-600 to-purple-600 shadow-xl shadow-indigo-500/20 hover:opacity-90 active:scale-95 transition-all mt-4">
-                                Sign In
-                            </button>
+                            <div><label class="block text-xs font-bold uppercase tracking-wider mb-2 text-secondary">Username</label><input type="text" id="login-user" required placeholder="ชื่อผู้ใช้งาน..." class="w-full p-4 rounded-xl input-field border outline-none focus:border-indigo-500 font-bold"></div>
+                            <div><label class="block text-xs font-bold uppercase tracking-wider mb-2 text-secondary">Password</label><input type="password" id="login-pass" required placeholder="••••••••" class="w-full p-4 rounded-xl input-field border outline-none focus:border-indigo-500 font-bold"></div>
+                            <button type="submit" class="w-full py-4 rounded-xl font-black tracking-wide text-white bg-gradient-to-r from-indigo-600 to-purple-600 shadow-xl shadow-indigo-500/20 hover:opacity-90 active:scale-95 transition-all mt-4">Sign In</button>
                         </form>
                     </div>
                 </div>
@@ -449,26 +561,17 @@
             mainStructure: () => `
                 <div class="min-h-screen flex flex-col md:flex-row">
                     <div class="md:hidden px-5 py-4 flex justify-between items-center bg-panel border-b sticky top-0 z-40">
-                        <div class="flex items-center space-x-3">
-                            <div class="p-2 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-lg text-white"><i data-lucide="radio" class="w-5 h-5"></i></div>
-                            <span class="font-black text-xl text-primary">Comms.</span>
-                        </div>
+                        <div class="flex items-center space-x-3"><div class="p-2 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-lg text-white"><i data-lucide="radio" class="w-5 h-5"></i></div><span class="font-black text-xl text-primary">Comms.</span></div>
                         <button onclick="app.toggleMobileMenu()" class="p-2 rounded-lg text-secondary"><i data-lucide="menu"></i></button>
                     </div>
                     <aside id="sidebar" class="fixed md:sticky top-0 left-0 z-30 h-screen w-64 flex-shrink-0 flex flex-col transform -translate-x-full md:translate-x-0 transition-all duration-300 shadow-2xl bg-panel border md:border-y-0 md:border-l-0">
-                        <div class="p-6 hidden md:flex items-center space-x-3">
-                            <div class="p-2 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl text-white"><i data-lucide="radio" class="w-5 h-5"></i></div>
-                            <span class="font-black text-xl text-primary">CommsControl</span>
-                        </div>
+                        <div class="p-6 hidden md:flex items-center space-x-3"><div class="p-2 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl text-white"><i data-lucide="radio" class="w-5 h-5"></i></div><span class="font-black text-xl text-primary">CommsControl</span></div>
                         <nav class="px-3 py-2 space-y-1.5 flex-1 overflow-y-auto hide-scroll" id="nav-container"></nav>
                         <div class="p-4 m-3 rounded-2xl bg-white/5 border border-white/5 space-y-1.5" id="nav-footer"></div>
                     </aside>
                     <main class="flex-1 p-5 md:p-8 lg:p-10 w-full overflow-y-auto">
                         <header class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4 fade-in">
-                            <div>
-                                <h1 id="page-title" class="text-3xl font-black text-primary"></h1>
-                                <p id="page-subtitle" class="text-sm text-secondary"></p>
-                            </div>
+                            <div><h1 id="page-title" class="text-3xl font-black text-primary"></h1><p id="page-subtitle" class="text-sm text-secondary"></p></div>
                             <div class="flex items-center space-x-3">
                                 <button onclick="app.fetchData()" class="p-2.5 rounded-xl bg-panel border transition hover-item text-secondary"><i data-lucide="refresh-cw" class="w-4 h-4"></i></button>
                                 <div class="px-4 py-2.5 rounded-xl bg-panel border flex items-center space-x-2"><div class="w-2 h-2 rounded-full" id="status-dot"></div><span class="text-xs font-bold text-secondary" id="status-text"></span></div>
@@ -479,27 +582,164 @@
                 </div>
             `,
 
-            dashboard: () => `
-                <div class="space-y-6">
-                    <div class="p-6 bg-gradient-to-r from-indigo-900/30 to-purple-900/10 border border-white/5 rounded-3xl flex items-center justify-between">
-                        <div>
-                            <h3 class="text-xl font-bold text-primary">สวัสดีคุณ, ${state.user?.username} (${state.user?.role})</h3>
-                            <p class="text-xs text-secondary mt-1">ระบบเฝ้าติดตามสถิติคลังสื่อสารแบบอัตโนมัติ</p>
+            dashboard: () => {
+                const total = state.devices.length;
+                const avail = state.devices.filter(d => d.status === 'available').length;
+                const borr = state.devices.filter(d => d.status === 'borrowed').length;
+                const maint = state.devices.filter(d => d.status === 'maintenance').length;
+
+                const trRows = state.transactions.slice(0, 5).map(t => {
+                    const emp = state.employees.find(e => e.id === t.employeeId);
+                    const typeLabel = t.type === 'borrow' ? 'เบิก' : t.type === 'maintenance' ? 'ซ่อม' : 'คืน';
+                    const typeColor = t.type === 'borrow' ? 'amber' : t.type === 'maintenance' ? 'rose' : 'emerald';
+                    return `
+                        <tr class="border-b border-slate-500/10 hover-item text-sm">
+                            <td class="p-4 text-secondary">${new Date(t.timestamp).toLocaleString('th-TH', {dateStyle:'short', timeStyle:'short'})}</td>
+                            <td class="p-4"><span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-${typeColor}-500/10 text-${typeColor}-500 border border-${typeColor}-500/20">${typeLabel}</span></td>
+                            <td class="p-4 font-bold text-primary">${t.deviceId}</td>
+                            <td class="p-4 text-secondary">${emp ? emp.name : '-'}</td>
+                            <td class="p-4 text-secondary text-xs">${t.location || '-'}</td>
+                        </tr>
+                    `;
+                }).join('') || `<tr><td colspan="5" class="p-8 text-center text-secondary">ไม่มีรายการเคลื่อนไหววันนี้</td></tr>`;
+
+                return `
+                    <div class="space-y-6">
+                        <div class="p-6 bg-gradient-to-r from-indigo-900/30 to-purple-900/10 border border-white/5 rounded-3xl flex items-center justify-between">
+                            <div><h3 class="text-xl font-bold text-primary">สวัสดีคุณ, ${state.user?.username} (${state.user?.role})</h3><p class="text-xs text-secondary mt-1">ระบบเฝ้าติดตามสถิติคลังสื่อสารแบบอัตโนมัติ</p></div>
+                        </div>
+                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div class="bg-panel p-5 rounded-2xl border"><p class="text-3xl font-black text-blue-500">${total}</p><p class="text-xs text-secondary mt-1 font-bold">เครื่องทั้งหมด</p></div>
+                            <div class="bg-panel p-5 rounded-2xl border"><p class="text-3xl font-black text-emerald-500">${avail}</p><p class="text-xs text-secondary mt-1 font-bold">พร้อมใช้งาน (คลัง)</p></div>
+                            <div class="bg-panel p-5 rounded-2xl border"><p class="text-3xl font-black text-amber-500">${borr}</p><p class="text-xs text-secondary mt-1 font-bold">ถูกเบิกปฏิบัติงาน</p></div>
+                            <div class="bg-panel p-5 rounded-2xl border"><p class="text-3xl font-black text-rose-500">${maint}</p><p class="text-xs text-secondary mt-1 font-bold">ชำรุด/ส่งซ่อม</p></div>
+                        </div>
+                        <div class="bg-panel border rounded-2xl overflow-hidden">
+                            <div class="p-5 border-b border-slate-500/10 font-bold text-primary flex items-center"><i data-lucide="clock" class="w-4 h-4 mr-2"></i> ประวัติ 5 รายการล่าสุด</div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left min-w-[600px]"><thead class="text-xs text-secondary table-header"><tr><th class="p-4">วัน-เวลา</th><th class="p-4">รายการ</th><th class="p-4">รหัสเครื่อง</th><th class="p-4">ผู้ทำรายการ</th><th class="p-4">จุดใช้งาน</th></tr></thead><tbody>${trRows}</tbody></table>
+                            </div>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div class="bg-panel p-5 rounded-2xl border"><p class="text-3xl font-black text-blue-500">${state.devices.length}</p><p class="text-xs text-secondary mt-1 font-bold">เครื่องทั้งหมด</p></div>
-                        <div class="bg-panel p-5 rounded-2xl border"><p class="text-3xl font-black text-emerald-500">${state.devices.filter(d=>d.status==='available').length}</p><p class="text-xs text-secondary mt-1 font-bold">พร้อมใช้งาน (คลัง)</p></div>
-                        <div class="bg-panel p-5 rounded-2xl border"><p class="text-3xl font-black text-amber-500">${state.devices.filter(d=>d.status==='borrowed').length}</p><p class="text-xs text-secondary mt-1 font-bold">ถูกเบิกปฏิบัติงาน</p></div>
-                        <div class="bg-panel p-5 rounded-2xl border"><p class="text-3xl font-black text-rose-500">${state.devices.filter(d=>d.status==='maintenance').length}</p><p class="text-xs text-secondary mt-1 font-bold">ชำรุด/ส่งซ่อม</p></div>
-                    </div>
-                </div>
-            `,
+                `;
+            },
 
-            // หน้าเบิกคืน / คลัง / รายงาน ย่อไว้ตามเดิมของเวอร์ชันล่าสุด
+            transactions: () => {
+                const t = state.transForm;
+                const list = t.type === 'borrow' ? state.devices.filter(d => d.status === 'available') : state.devices.filter(d => d.status === 'borrowed');
+                
+                const devsHtml = list.length > 0 ? list.map(d => {
+                    const isSel = t.selectedDevices.includes(d.id);
+                    const cBorder = isSel ? (t.type==='borrow'?'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/10':'border-emerald-500 bg-emerald-500/10 shadow-lg shadow-emerald-500/10') : 'border-slate-500/10 bg-black/10';
+                    const cIcon = isSel ? (t.type==='borrow'?'text-indigo-500':'text-emerald-500') : 'text-slate-500';
+                    const empName = t.type === 'return' ? `<p class="text-[11px] mt-2 text-amber-400 font-bold">👤 ยืมโดย: ${state.employees.find(e => e.id === d.assignedTo)?.name.split(' ')[0] || d.assignedTo}</p>` : '';
+                    
+                    return `
+                        <div onclick="toggleDeviceSelect('${d.id}')" class="p-4 rounded-xl border-2 cursor-pointer transition transform hover:-translate-y-0.5 active:scale-95 ${cBorder}">
+                            <div class="flex justify-between mb-2"><i data-lucide="radio" class="w-5 h-5 ${cIcon}"></i><i data-lucide="${isSel?'check-square':'square'}" class="w-5 h-5 ${cIcon}"></i></div>
+                            <p class="font-black text-primary text-base tracking-wide">${d.id}</p><p class="text-[11px] text-secondary mt-0.5">${d.model}</p>${empName}
+                        </div>
+                    `;
+                }).join('') : `<div class="col-span-full p-8 text-center border border-dashed border-slate-500/30 rounded-xl text-secondary">ไม่มีอุปกรณ์ให้ทำรายการ</div>`;
+
+                const empOptions = state.employees.map(e => `<option value="${e.id} - ${e.name}">`).join('');
+                const uniqueLocs = [...new Set(state.transactions.map(tr => tr.location).filter(l => l && l !== '-'))];
+                const locOptions = uniqueLocs.map(l => `<option value="${l}">`).join('');
+
+                return `
+                    <div class="max-w-4xl mx-auto space-y-6">
+                        <div class="flex p-1.5 bg-panel border rounded-2xl">
+                            <button onclick="setTransType('borrow')" class="flex-1 py-3 font-bold text-sm rounded-xl transition ${t.type==='borrow'?'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20':'text-slate-400 hover:text-white'}">เบิกอุปกรณ์</button>
+                            <button onclick="setTransType('return')" class="flex-1 py-3 font-bold text-sm rounded-xl transition ${t.type==='return'?'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20':'text-slate-400 hover:text-white'}">คืนอุปกรณ์</button>
+                        </div>
+                        <form onsubmit="handleTransaction(event)" class="bg-panel border p-6 md:p-8 rounded-[2rem] space-y-6">
+                            <div><label class="block font-black text-primary text-base mb-3">1. เลือกวิทยุสื่อสาร <span class="text-xs font-normal text-secondary ml-1">(เลือกได้หลายเครื่อง)</span></label><div class="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-64 overflow-y-auto pr-1 custom-scrollbar">${devsHtml}</div></div>
+                            ${t.type === 'borrow' ? `
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-500/10 pt-6">
+                                    <div><label class="block font-bold text-sm text-primary mb-2">2. พนักงานผู้เบิก</label><input type="text" id="trans-emp" list="emp-list" required placeholder="พิมพ์ชื่อหรือรหัสพนักงาน..." class="w-full p-3.5 rounded-xl input-field border outline-none focus:border-indigo-500 font-bold text-sm" autoComplete="off"><datalist id="emp-list">${empOptions}</datalist></div>
+                                    <div><label class="block font-bold text-sm text-primary mb-2">3. สถานที่ปฏิบัติงาน</label><input type="text" id="trans-loc" list="loc-list" required placeholder="ระบุจุด/สถานที่ใช้งาน..." class="w-full p-3.5 rounded-xl input-field border outline-none focus:border-indigo-500 font-bold text-sm" autoComplete="off"><datalist id="loc-list">${locOptions}</datalist></div>
+                                </div>
+                            ` : ''}
+                            <div class="border-t border-slate-500/10 pt-6"><label class="block font-bold text-sm text-primary mb-2">หมายเหตุเพิ่มเติม</label><input type="text" id="trans-note" placeholder="วัตถุประสงค์ หรือ สภาพเครื่อง..." class="w-full p-3.5 rounded-xl input-field border outline-none focus:border-indigo-500 text-sm"></div>
+                            <button type="submit" class="w-full py-4.5 rounded-xl font-black text-white text-base ${t.type==='borrow'?'bg-indigo-600 hover:bg-indigo-500':'bg-emerald-600 hover:bg-emerald-500'} active:scale-[0.99] transition mt-2">ยืนยันข้อมูลรายการ (${t.selectedDevices.length} เครื่อง)</button>
+                        </form>
+                    </div>
+                `;
+            },
+
+            devices: () => {
+                const list = state.devices.map(d => {
+                    const name = state.employees.find(e => e.id === d.assignedTo)?.name || d.assignedTo;
+                    const actionBtn = d.status === 'borrowed' 
+                        ? `<span class="text-[11px] font-bold text-amber-500 bg-amber-500/10 p-2 rounded-xl border border-amber-500/10 w-full text-center">👤 ถือครองโดย: ${name}</span>`
+                        : `<button onclick="changeDeviceStatus('${d.id}', '${d.status==='maintenance'?'available':'maintenance'}')" class="text-xs font-bold px-3 py-2 rounded-xl w-full border ${d.status==='maintenance'?'bg-emerald-500/10 text-emerald-500 border-emerald-500/20':'bg-rose-500/10 text-rose-500 border-rose-500/20 hover:bg-rose-500/20'} transition">${d.status==='maintenance'?'🔧 ปลดล็อกเครื่อง':'🛠️ แจ้งส่งซ่อม'}</button>`;
+                    return `<div class="bg-panel border p-5 rounded-2xl flex flex-col hover:border-slate-500/30 transition"><div class="flex justify-between items-start mb-3"><div class="p-2 bg-white/5 rounded-lg text-secondary"><i data-lucide="radio" class="w-5 h-5"></i></div>${app.getStatusHTML(d.status)}</div><h3 class="font-black text-xl text-primary tracking-wide">${d.id}</h3><p class="text-xs text-secondary mt-0.5 font-bold">${d.model}</p><p class="text-[11px] text-slate-500 mt-1">S/N: ${d.serial || '-'}</p><div class="mt-5 pt-3 border-t border-slate-500/5 flex">${actionBtn}</div></div>`;
+                }).join('');
+
+                return `
+                    <div class="space-y-6">
+                        <form onsubmit="submitDevice(event)" class="bg-panel border p-5 rounded-2xl grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                            <div><label class="text-xs font-bold text-secondary">รหัสเครื่อง (ID)</label><input type="text" id="dev-id" required placeholder="เช่น R-004" class="w-full p-2.5 rounded-xl input-field border mt-1 font-bold text-sm"></div>
+                            <div><label class="text-xs font-bold text-secondary">รุ่น (Model)</label><input type="text" id="dev-model" required placeholder="เช่น Icom IC-V80" class="w-full p-2.5 rounded-xl input-field border mt-1 font-bold text-sm"></div>
+                            <div><label class="text-xs font-bold text-secondary">Serial Number</label><input type="text" id="dev-sn" placeholder="ระบุ S/N..." class="w-full p-2.5 rounded-xl input-field border mt-1 font-bold text-sm"></div>
+                            <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm p-2.5 rounded-xl h-[44px]">เพิ่มอุปกรณ์เข้าคลัง</button>
+                        </form>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">${list}</div>
+                    </div>
+                `;
+            },
+
+            employees: () => {
+                const list = state.employees.map(e => `
+                    <tr class="border-b border-slate-500/10 hover-item text-sm"><td class="p-4 font-black text-primary tracking-wide">${e.id}</td><td class="p-4 font-bold text-primary">${e.name}</td><td class="p-4"><span class="px-3 py-1 bg-slate-500/10 border border-slate-500/20 text-secondary rounded-lg text-xs font-semibold">${e.department}</span></td><td class="p-4 text-secondary font-medium tracking-wide">${e.phone || '-'}</td></tr>
+                `).join('') || `<tr><td colspan="4" class="p-6 text-center text-secondary">ไม่มีรายชื่อ</td></tr>`;
+
+                return `
+                    <div class="space-y-6">
+                        <form onsubmit="submitEmployee(event)" class="bg-panel border p-5 rounded-2xl grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                            <div><label class="text-xs font-bold text-secondary">รหัสบุคลากร</label><input type="text" id="emp-id" required placeholder="EMP-003" class="w-full p-2.5 rounded-xl input-field border mt-1 text-sm font-bold"></div>
+                            <div><label class="text-xs font-bold text-secondary">ชื่อ-นามสกุล</label><input type="text" id="emp-name" required placeholder="ชื่อพนักงาน" class="w-full p-2.5 rounded-xl input-field border mt-1 text-sm font-bold"></div>
+                            <div><label class="text-xs font-bold text-secondary">แผนก/ฝ่าย</label><input type="text" id="emp-dept" required placeholder="รปภ. / ช่าง" class="w-full p-2.5 rounded-xl input-field border mt-1 text-sm font-bold"></div>
+                            <div><label class="text-xs font-bold text-secondary">เบอร์ติดต่อ</label><input type="text" id="emp-phone" placeholder="08x-xxx-xxxx" class="w-full p-2.5 rounded-xl input-field border mt-1 text-sm font-bold"></div>
+                            <button type="submit" class="sm:col-span-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm p-3 rounded-xl">ลงทะเบียนบุคลากรใหม่</button>
+                        </form>
+                        <div class="bg-panel border rounded-2xl overflow-x-auto"><table class="w-full text-left min-w-[600px]"><thead class="text-xs text-secondary table-header"><tr><th class="p-4">รหัส</th><th class="p-4">ชื่อ-สกุล</th><th class="p-4">แผนก</th><th class="p-4">เบอร์โทรศัพท์</th></tr></thead><tbody>${list}</tbody></table></div>
+                    </div>
+                `;
+            },
+
+            reports: () => {
+                const trRows = state.transactions.map(t => {
+                    const emp = state.employees.find(e => e.id === t.employeeId);
+                    const label = t.type==='borrow'?'เบิก':t.type==='maintenance'?'ซ่อม':'คืน';
+                    const color = t.type==='borrow'?'amber':t.type==='maintenance'?'rose':'emerald';
+                    return `
+                        <tr class="border-b border-slate-500/5 hover-item text-sm text-primary">
+                            <td class="p-4 text-secondary text-xs">${new Date(t.timestamp).toLocaleDateString('th-TH')} ${new Date(t.timestamp).toLocaleTimeString('th-TH')}</td>
+                            <td class="p-4"><span class="px-2 py-0.5 bg-${color}-500/10 text-${color}-400 border border-${color}-500/20 text-xs font-bold rounded-md">${label}</span></td>
+                            <td class="p-4 font-black">${t.deviceId}</td>
+                            <td class="p-4 font-bold text-sm">${emp ? emp.name : '-'}</td>
+                            <td class="p-4 text-xs text-secondary">${t.location || '-'}</td>
+                            <td class="p-4 text-xs text-slate-500 font-medium">${t.note || '-'}</td>
+                        </tr>
+                    `;
+                }).join('') || `<tr><td colspan="6" class="p-10 text-center text-secondary">ไม่มีประวัติรายงานข้อมูล</td></tr>`;
+
+                return `
+                    <div class="space-y-6">
+                        <div class="bg-panel border p-5 rounded-2xl flex flex-wrap gap-4 items-end">
+                            <div class="w-full sm:w-auto"><label class="text-xs font-bold text-secondary block mb-1">ตั้งแต่วันที่</label><input type="date" id="rep-start" class="p-2.5 rounded-xl input-field border text-sm font-bold"></div>
+                            <div class="w-full sm:w-auto"><label class="text-xs font-bold text-secondary block mb-1">ถึงวันที่</label><input type="date" id="rep-end" class="p-2.5 rounded-xl input-field border text-sm font-bold"></div>
+                            <button onclick="executeExportCSV()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm px-6 py-3 rounded-xl flex items-center h-[42px] shadow-lg shadow-emerald-600/10"><i data-lucide="download" class="w-4 h-4 mr-2"></i> ส่งออกตารางรายงาน (CSV)</button>
+                        </div>
+                        <div class="bg-panel border rounded-2xl overflow-x-auto max-h-[60vh] relative shadow-inner">
+                            <table class="w-full text-left min-w-[800px]"><thead class="sticky top-0 bg-slate-900/90 border-b border-slate-500/10 text-secondary text-xs"><tr class="table-header"><th class="p-4">วัน-เวลา</th><th class="p-4">รายการ</th><th class="p-4">เครื่อง</th><th class="p-4">ผู้ปฏิบัติงาน</th><th class="p-4">สถานที่</th><th class="p-4">หมายเหตุ</th></tr></thead><tbody>${trRows}</tbody></table>
+                        </div>
+                    </div>
+                `;
+            },
 
             settings: () => {
-                // สร้างรายการตาราง Users
                 const userRows = state.users.map(u => `
                     <tr class="border-b border-slate-500/10 hover-item text-sm">
                         <td class="p-4 font-bold text-primary">${u.username}</td>
@@ -509,7 +749,7 @@
                             ${state.user.role === 'ผู้ดูแลระบบ' ? `
                                 <button onclick="editSystemUser('${u.username}')" class="p-2 rounded-lg transition-colors text-slate-400 hover:text-indigo-500 hover:bg-indigo-500/10"><i data-lucide="edit" class="w-4 h-4"></i></button>
                                 <button onclick="deleteSystemUser('${u.username}')" class="p-2 rounded-lg transition-colors text-slate-400 hover:text-rose-500 hover:bg-rose-500/10"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                            ` : `<span class="text-xs text-slate-500">ไม่มีสิทธิ์จัดการ</span>`}
+                            ` : `<span class="text-xs text-slate-500">ไม่มีสิทธิ์</span>`}
                         </td>
                     </tr>
                 `).join('');
@@ -518,45 +758,22 @@
 
                 return `
                 <div class="max-w-4xl mx-auto space-y-6">
-                    
                     <div class="bg-panel border p-6 md:p-8 rounded-[2rem] shadow-xl">
-                        <div class="flex items-center justify-between mb-6">
-                            <h3 class="text-xl font-black text-primary flex items-center"><i data-lucide="users" class="w-5 h-5 mr-3 text-purple-500"></i> การจัดการผู้ใช้งาน (Users)</h3>
-                        </div>
-
+                        <h3 class="text-xl font-black text-primary flex items-center mb-6"><i data-lucide="users" class="w-5 h-5 mr-3 text-purple-500"></i> การจัดการผู้ใช้งาน (Users)</h3>
                         ${state.user.role === 'ผู้ดูแลระบบ' ? `
                         <form onsubmit="submitSystemUser(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8 bg-black/10 p-5 rounded-2xl border border-slate-500/10">
                             <div><label class="block text-xs font-bold text-secondary mb-1">Username</label><input type="text" id="sys-username" required class="w-full p-2.5 rounded-xl input-field border text-sm font-bold"></div>
                             <div><label class="block text-xs font-bold text-secondary mb-1">Password</label><input type="text" id="sys-password" required class="w-full p-2.5 rounded-xl input-field border text-sm font-bold"></div>
-                            <div>
-                                <label class="block text-xs font-bold text-secondary mb-1">สิทธิ์ (Role)</label>
-                                <select id="sys-role" class="w-full p-2.5 rounded-xl input-field border text-sm font-bold outline-none">
-                                    <option value="เจ้าหน้าที่">เจ้าหน้าที่</option>
-                                    <option value="ผู้ดูแลระบบ">ผู้ดูแลระบบ</option>
-                                </select>
-                            </div>
-                            <div class="flex items-end">
-                                <button type="submit" class="w-full p-3 rounded-xl font-bold text-white text-sm transition-all ${isEdit ? 'bg-amber-600 hover:bg-amber-500' : 'bg-purple-600 hover:bg-purple-500'}">
-                                    ${isEdit ? 'บันทึกการแก้ไข' : 'เพิ่มบัญชีใหม่'}
-                                </button>
-                            </div>
+                            <div><label class="block text-xs font-bold text-secondary mb-1">สิทธิ์ (Role)</label><select id="sys-role" class="w-full p-2.5 rounded-xl input-field border text-sm font-bold outline-none"><option value="เจ้าหน้าที่">เจ้าหน้าที่</option><option value="ผู้ดูแลระบบ">ผู้ดูแลระบบ</option></select></div>
+                            <div class="flex items-end"><button type="submit" class="w-full p-3 rounded-xl font-bold text-white text-sm transition-all ${isEdit ? 'bg-amber-600 hover:bg-amber-500' : 'bg-purple-600 hover:bg-purple-500'}">${isEdit ? 'บันทึกการแก้ไข' : 'เพิ่มบัญชีใหม่'}</button></div>
                         </form>
-                        ` : `<div class="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 text-sm font-bold">คุณสามารถดูรายชื่อได้ แต่ต้องเป็น 'ผู้ดูแลระบบ' เท่านั้นถึงจะเพิ่ม/แก้ไขได้</div>`}
-
-                        <div class="overflow-x-auto rounded-xl border border-slate-500/10">
-                            <table class="w-full text-left min-w-[500px]">
-                                <thead class="text-xs text-secondary table-header"><tr><th class="p-4">Username</th><th class="p-4">Password</th><th class="p-4">Role</th><th class="p-4 text-right">Action</th></tr></thead>
-                                <tbody>${userRows}</tbody>
-                            </table>
-                        </div>
+                        ` : `<div class="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-500 text-sm font-bold">คุณต้องเป็น 'ผู้ดูแลระบบ' เท่านั้นถึงจะเพิ่ม/แก้ไขผู้ใช้ได้</div>`}
+                        <div class="overflow-x-auto rounded-xl border border-slate-500/10"><table class="w-full text-left min-w-[500px]"><thead class="text-xs text-secondary table-header"><tr><th class="p-4">Username</th><th class="p-4">Password</th><th class="p-4">Role</th><th class="p-4 text-right">Action</th></tr></thead><tbody>${userRows}</tbody></table></div>
                     </div>
 
                     <form onsubmit="saveDatabaseSettings(event)" class="bg-panel border p-6 md:p-8 rounded-[2rem] space-y-4 shadow-xl">
                         <h3 class="text-xl font-black text-primary flex items-center"><i data-lucide="cloud-lightning" class="w-5 h-5 mr-3 text-indigo-500"></i> การเชื่อมต่อฐานข้อมูล (Database)</h3>
-                        <div class="pt-2">
-                            <label class="block font-bold text-sm text-secondary mb-2">URL ของ Google Apps Script</label>
-                            <input type="url" id="setting-url" value="${state.gasUrl}" placeholder="https://script.google.com/macros/s/.../exec" class="w-full p-4 rounded-xl input-field border outline-none focus:border-indigo-500 font-medium text-sm">
-                        </div>
+                        <div class="pt-2"><label class="block font-bold text-sm text-secondary mb-2">URL ของ Google Apps Script</label><input type="url" id="setting-url" value="${state.gasUrl}" placeholder="https://script.google.com/macros/s/.../exec" class="w-full p-4 rounded-xl input-field border outline-none focus:border-indigo-500 font-medium text-sm"></div>
                         <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm px-6 py-3.5 rounded-xl transition">บันทึกการตั้งค่าซิงค์</button>
                     </form>
 
@@ -564,10 +781,7 @@
                         <h3 class="text-xl font-black text-primary flex items-center mb-4"><i data-lucide="download-cloud" class="w-5 h-5 mr-3 text-emerald-500"></i> นำเข้า / ส่งออก ข้อมูล (Backup & Restore)</h3>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <button onclick="exportBackupJSON()" class="p-4 bg-white/5 border rounded-xl font-bold text-sm text-primary flex items-center justify-center hover-item"><i data-lucide="download" class="w-4 h-4 mr-2 text-blue-400"></i> ดาวน์โหลดไฟล์สำรอง (.json)</button>
-                            <div class="relative">
-                                <input type="file" id="import-file" accept=".json" onchange="importBackupJSON(event)" class="hidden">
-                                <label htmlFor="import-file" onclick="document.getElementById('import-file').click()" class="p-4 bg-white/5 border border-dashed rounded-xl font-bold text-sm text-primary flex items-center justify-center hover-item cursor-pointer"><i data-lucide="upload" class="w-4 h-4 mr-2 text-purple-400"></i> กู้คืนระบบจากไฟล์ (.json)</label>
-                            </div>
+                            <div class="relative"><input type="file" id="import-file" accept=".json" onchange="importBackupJSON(event)" class="hidden"><label htmlFor="import-file" onclick="document.getElementById('import-file').click()" class="p-4 bg-white/5 border border-dashed rounded-xl font-bold text-sm text-primary flex items-center justify-center hover-item cursor-pointer"><i data-lucide="upload" class="w-4 h-4 mr-2 text-purple-400"></i> กู้คืนระบบจากไฟล์ (.json)</label></div>
                         </div>
                     </div>
                 </div>
@@ -575,9 +789,6 @@
             }
         };
 
-        // ==========================================
-        // 6. INITIAL RUN
-        // ==========================================
         document.addEventListener('DOMContentLoaded', () => app.init());
     </script>
 </body>
