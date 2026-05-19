@@ -1,21 +1,10 @@
-{
-  "name": "CommsControl Radio",
-  "short_name": "CommsApp",
-  "start_url": ".",
-  "display": "standalone",
-  "background_color": "#060913",
-  "theme_color": "#060913",
-  "description": "ระบบจัดการเบิก-คืนวิทยุสื่อสาร",
-  "icons": [
-    {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ]
-}
+<head>
+    <link rel="manifest" href="manifest.json">
+    
+    <meta name="theme-color" content="#060913">
+    
+    <link rel="apple-touch-icon" href="icon-192.png">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
