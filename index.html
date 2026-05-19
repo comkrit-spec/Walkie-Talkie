@@ -3,131 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CommsControl - ระบบจัดการวิทยุสื่อสาร</title>
+    <title>CommsControl - ระบบจัดการวิทยุสื่อสารระดับองค์กร</title>
     
-    <meta name="theme-color" content="#0f1524">
+    <meta name="theme-color" content="#060913">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <style>
-        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: #64748b; }
         .hide-scroll::-webkit-scrollbar { display: none; }
         
-        /* Animations */
         .fade-in { animation: fadeIn 0.4s ease-out forwards; }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* Light Theme Overrides (Default is Dark) */
-        body.light-theme {
-            background-color: #f8fafc;
-            color: #0f172a;
-        }
-        body.light-theme .bg-panel { background-color: #ffffff; border-color: #e2e8f0; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        body.light-theme { background-color: #f8fafc; color: #0f172a; }
+        body.light-theme .bg-panel { background-color: #ffffff; border-color: #e2e8f0; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05); }
         body.light-theme .text-primary { color: #0f172a; }
         body.light-theme .text-secondary { color: #64748b; }
         body.light-theme .input-field { background-color: #f1f5f9; border-color: #cbd5e1; color: #0f172a; }
         body.light-theme .hover-item:hover { background-color: #f1f5f9; }
+        body.light-theme .table-header { background-color: #f1f5f9; color: #475569; }
         
-        /* Default Dark Theme Classes */
         body { background-color: #060913; color: #f1f5f9; }
-        .bg-panel { background-color: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.1); backdrop-filter: blur(16px); }
+        .bg-panel { background-color: rgba(15, 23, 42, 0.4); border-color: rgba(255,255,255,0.05); backdrop-filter: blur(24px); }
         .text-primary { color: #ffffff; }
         .text-secondary { color: #94a3b8; }
-        .input-field { background-color: rgba(0,0,0,0.2); border-color: rgba(255,255,255,0.1); color: #ffffff; }
-        .hover-item:hover { background-color: rgba(255,255,255,0.05); }
+        .input-field { background-color: rgba(0,0,0,0.3); border-color: rgba(255,255,255,0.08); color: #ffffff; }
+        .hover-item:hover { background-color: rgba(255,255,255,0.04); }
+        .table-header { background-color: rgba(0,0,0,0.2); color: #94a3b8; }
     </style>
 </head>
 <body class="font-sans transition-colors duration-500 overflow-hidden" id="body-tag">
     
-    <div class="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-600/20 blur-[120px] pointer-events-none z-0"></div>
-    <div class="fixed bottom-[-10%] right-[-5%] w-[30%] h-[40%] rounded-full bg-purple-600/20 blur-[120px] pointer-events-none z-0"></div>
+    <div class="fixed top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-600/15 blur-[140px] pointer-events-none z-0"></div>
+    <div class="fixed bottom-[-10%] right-[-5%] w-[40%] h-[50%] rounded-full bg-purple-600/15 blur-[140px] pointer-events-none z-0"></div>
 
-    <div class="min-h-screen flex flex-col md:flex-row relative z-10">
-        
-        <div class="md:hidden px-5 py-4 flex justify-between items-center sticky top-0 z-40 bg-panel border-b">
-            <div class="flex items-center space-x-3">
-                <div class="p-2 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-lg text-white">
-                    <i data-lucide="radio" class="w-5 h-5"></i>
-                </div>
-                <span class="font-black text-xl tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-500">Comms.</span>
-            </div>
-            <button onclick="app.toggleMobileMenu()" class="p-2 rounded-lg text-secondary">
-                <i data-lucide="menu" id="mobile-menu-icon"></i>
-            </button>
-        </div>
-
-        <aside id="sidebar" class="fixed md:relative top-0 left-0 z-30 h-screen md:h-[calc(100vh-1.5rem)] md:m-3 w-64 flex-shrink-0 flex flex-col rounded-none md:rounded-3xl transform -translate-x-full md:translate-x-0 transition-all duration-300 ease-out shadow-2xl bg-panel border">
-            <div class="p-6 hidden md:flex items-center space-x-3">
-                <div class="p-2.5 bg-gradient-to-tr from-indigo-500 via-purple-500 to-indigo-500 bg-[length:200%_auto] rounded-xl shadow-lg text-white">
-                    <i data-lucide="radio" class="w-6 h-6"></i>
-                </div>
-                <span class="font-black text-2xl tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-500">Comms.</span>
-            </div>
-            
-            <nav class="px-3 py-2 space-y-1 flex-1 mt-6 md:mt-0 overflow-y-auto hide-scroll" id="nav-container">
-                </nav>
-
-            <div class="p-3 border-t border-slate-500/20 space-y-1" id="nav-footer">
-                </div>
-        </aside>
-
-        <main class="flex-1 p-5 md:p-8 w-full h-screen overflow-y-auto scroll-smooth relative z-10">
-            
-            <header class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4 fade-in">
-                <div>
-                    <h1 id="page-title" class="text-3xl md:text-4xl font-black tracking-tight mb-1 text-primary">Overview</h1>
-                    <p id="page-subtitle" class="text-sm md:text-base font-medium text-secondary">กำลังเตรียมระบบ...</p>
-                </div>
-                
-                <div class="flex items-center space-x-3">
-                    <button onclick="app.fetchData()" class="p-2 rounded-xl bg-panel border transition hover-item" title="รีเฟรชข้อมูล">
-                        <i data-lucide="refresh-cw" class="w-5 h-5 text-secondary"></i>
-                    </button>
-                    <div class="px-4 py-2 rounded-xl bg-panel border flex items-center space-x-2 cursor-pointer" onclick="app.switchView('settings')" title="คลิกเพื่อตั้งค่าการเชื่อมต่อ">
-                        <div class="w-2.5 h-2.5 rounded-full bg-slate-500" id="status-dot"></div>
-                        <span class="text-sm font-bold text-secondary" id="status-text">รอการเชื่อมต่อ</span>
-                    </div>
-                </div>
-            </header>
-
-            <div id="view-container" class="pb-20"></div>
-
-        </main>
-    </div>
+    <div id="app-root" class="min-h-screen w-full relative z-10"></div>
 
     <script>
-        // ==========================================
-        // 1. STATE & DATA
-        // ==========================================
         const state = {
+            isLoggedIn: sessionStorage.getItem('comms_logged_in') === 'true',
+            user: JSON.parse(sessionStorage.getItem('comms_user')) || null,
             currentView: 'dashboard',
             isMobileMenuOpen: false,
             theme: localStorage.getItem('comms_theme') || 'dark',
             gasUrl: localStorage.getItem('comms_gas_url') || '',
-            
             devices: [],
             employees: [],
             transactions: [],
-            
-            transForm: { type: 'borrow', selectedDevices: [] }
+            transForm: { type: 'borrow', selectedDevices: [] },
+            idleTimer: null,
+            autoRefreshInterval: null
         };
 
-        // ข้อมูลจำลองกรณีไม่มีฐานข้อมูล
         const fallbackDevices = [
             { id: 'R-001', model: 'Motorola CP200d', serial: 'S/N-9901', status: 'available' },
             { id: 'R-002', model: 'Motorola CP200d', serial: 'S/N-9902', status: 'borrowed', assignedTo: 'EMP-001' },
             { id: 'R-003', model: 'Icom IC-V80', serial: 'S/N-8801', status: 'maintenance' }
+        ];
+        const fallbackEmployees = [
+            { id: 'EMP-001', name: 'สมชาย ใจกล้า', department: 'รักษาความปลอดภัย', phone: '081-111-1111' },
+            { id: 'EMP-002', name: 'วิชัย รักงาน', department: 'ช่างซ่อมบำรุง', phone: '082-222-2222' }
         ];
 
         const navItems = [
@@ -138,52 +83,77 @@
             { id: 'reports', icon: 'file-bar-chart', label: 'รายงาน' }
         ];
 
-        // ==========================================
-        // 2. CORE APP LOGIC
-        // ==========================================
         const app = {
             init: function() {
                 this.applyTheme();
-                this.renderNavigation();
-                
-                if (state.gasUrl) {
+                if (state.isLoggedIn) {
+                    this.renderMainLayout();
+                    this.startSessionTracking();
                     this.fetchData();
+                    this.startAutoRefresh();
                 } else {
-                    // Load fallback data
-                    state.devices = fallbackDevices;
+                    this.renderLoginScreen();
+                }
+            },
+
+            handleLogin: function(e) {
+                e.preventDefault();
+                const user = document.getElementById('login-user').value.trim();
+                const pass = document.getElementById('login-pass').value;
+
+                if ((user === 'admin' && pass === 'admin1234') || (user === 'user' && pass === '1234')) {
+                    state.isLoggedIn = true;
+                    state.user = { username: user, role: user === 'admin' ? 'ผู้ดูแลระบบ' : 'เจ้าหน้าที่' };
+                    sessionStorage.setItem('comms_logged_in', 'true');
+                    sessionStorage.setItem('comms_user', JSON.stringify(state.user));
+                    this.renderMainLayout();
+                    this.startSessionTracking();
+                    this.fetchData();
+                    this.startAutoRefresh();
+                } else {
+                    alert('❌ รหัสผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง');
+                }
+            },
+
+            handleLogout: function(reason) {
+                state.isLoggedIn = false;
+                state.user = null;
+                sessionStorage.clear();
+                clearInterval(state.autoRefreshInterval);
+                this.stopSessionTracking();
+                this.renderLoginScreen();
+                if (reason === 'idle') alert('🔒 ระบบได้ล็อกเอาต์อัตโนมัติเนื่องจากไม่มีการใช้งานเกิน 10 นาที');
+            },
+
+            startSessionTracking: function() {
+                this.stopSessionTracking();
+                const resetTimer = () => {
+                    clearTimeout(state.idleTimer);
+                    if (state.isLoggedIn) state.idleTimer = setTimeout(() => this.handleLogout('idle'), 600000);
+                };
+                window._idleListeners = ['mousemove', 'keydown', 'click', 'scroll'].forEach(evt => window.addEventListener(evt, resetTimer));
+                resetTimer();
+            },
+            stopSessionTracking: function() { clearTimeout(state.idleTimer); },
+
+            startAutoRefresh: function() {
+                clearInterval(state.autoRefreshInterval);
+                state.autoRefreshInterval = setInterval(() => {
+                    if (state.isLoggedIn && state.gasUrl) this.fetchData(true);
+                }, 30000);
+            },
+
+            fetchData: async function(isBackground = false) {
+                if (!state.gasUrl) {
+                    if(state.devices.length === 0) {
+                        state.devices = fallbackDevices;
+                        state.employees = fallbackEmployees;
+                    }
                     this.updateStatus('Local Mode', 'amber');
-                    this.switchView('dashboard');
+                    this.switchView(state.currentView);
+                    return;
                 }
-            },
-
-            applyTheme: function() {
-                const body = document.getElementById('body-tag');
-                if (state.theme === 'light') {
-                    body.classList.add('light-theme');
-                } else {
-                    body.classList.remove('light-theme');
-                }
-                this.renderNavigation(); // Re-render to update icon
-            },
-
-            toggleTheme: function() {
-                state.theme = state.theme === 'dark' ? 'light' : 'dark';
-                localStorage.setItem('comms_theme', state.theme);
-                this.applyTheme();
-            },
-
-            saveSettings: function(event) {
-                event.preventDefault();
-                const url = document.getElementById('setting-url').value;
-                state.gasUrl = url;
-                localStorage.setItem('comms_gas_url', url);
-                alert('บันทึกการตั้งค่าแล้ว ระบบจะทำการโหลดข้อมูลใหม่');
-                this.fetchData();
-            },
-
-            fetchData: async function() {
-                if (!state.gasUrl) return;
-                this.updateStatus('Syncing...', 'spin');
+                if(!isBackground) this.updateStatus('Syncing...', 'spin');
                 try {
                     const response = await fetch(state.gasUrl);
                     const data = await response.json();
@@ -193,15 +163,19 @@
                     this.updateStatus('Online', 'emerald');
                 } catch (error) {
                     console.error("Fetch Error:", error);
-                    this.updateStatus('Error', 'rose');
+                    this.updateStatus('Error Connecting', 'rose');
                 } finally {
                     if(state.currentView !== 'settings') this.renderCurrentView();
                 }
             },
 
             syncData: async function(payload) {
-                if (!state.gasUrl) return;
-                this.updateStatus('Syncing...', 'spin');
+                this.updateStatus('Saving...', 'spin');
+                if (!state.gasUrl) {
+                    this.updateStatus('Local Mode', 'amber');
+                    this.renderCurrentView();
+                    return;
+                }
                 try {
                     await fetch(state.gasUrl, {
                         method: 'POST',
@@ -209,28 +183,54 @@
                         headers: { 'Content-Type': 'text/plain;charset=utf-8' }
                     });
                     this.updateStatus('Online', 'emerald');
+                    this.fetchData(true); 
                 } catch (error) {
                     console.error("Sync Error:", error);
-                    this.updateStatus('Error', 'rose');
+                    this.updateStatus('Error saving', 'rose');
                 }
+            },
+
+            applyTheme: function() {
+                const body = document.getElementById('body-tag');
+                if (state.theme === 'light') body.classList.add('light-theme');
+                else body.classList.remove('light-theme');
+                if(state.isLoggedIn) this.renderNavigation(); 
+            },
+
+            toggleTheme: function() {
+                state.theme = state.theme === 'dark' ? 'light' : 'dark';
+                localStorage.setItem('comms_theme', state.theme);
+                this.applyTheme();
+            },
+
+            saveDatabaseSettings: function(e) {
+                e.preventDefault();
+                const url = document.getElementById('setting-url').value.trim();
+                state.gasUrl = url;
+                localStorage.setItem('comms_gas_url', url);
+                alert('💾 บันทึกการเชื่อมต่อฐานข้อมูลเรียบร้อย ระบบกำลังซิงค์ข้อมูลใหม่...');
+                this.fetchData();
             },
 
             updateStatus: function(text, color) {
                 const dot = document.getElementById('status-dot');
-                document.getElementById('status-text').innerText = text;
-                
-                if (color === 'spin') {
-                    dot.className = 'w-3 h-3 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin bg-transparent';
-                } else {
-                    dot.className = `w-2.5 h-2.5 rounded-full bg-${color}-500 ${color==='emerald' ? 'animate-pulse' : ''}`;
+                const label = document.getElementById('status-text');
+                if(label) label.innerText = text;
+                if(dot) {
+                    if (color === 'spin') dot.className = 'w-3 h-3 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin bg-transparent';
+                    else dot.className = `w-2.5 h-2.5 rounded-full bg-${color}-500 ${color==='emerald' ? 'animate-pulse' : ''}`;
                 }
             },
 
-            toggleMobileMenu: function() {
-                state.isMobileMenuOpen = !state.isMobileMenuOpen;
-                const sidebar = document.getElementById('sidebar');
-                if(state.isMobileMenuOpen) sidebar.classList.remove('-translate-x-full');
-                else sidebar.classList.add('-translate-x-full');
+            renderLoginScreen: function() {
+                document.getElementById('app-root').innerHTML = views.login();
+                lucide.createIcons();
+            },
+
+            renderMainLayout: function() {
+                document.getElementById('app-root').innerHTML = views.mainStructure();
+                this.renderNavigation();
+                this.switchView('dashboard');
             },
 
             switchView: function(viewId) {
@@ -238,13 +238,12 @@
                 this.renderNavigation();
                 
                 const titles = {
-                    'dashboard': { title: 'Welcome back', sub: 'ภาพรวมระบบและการใช้งานวันนี้' },
-                    'transactions': { title: 'Borrow & Return', sub: 'ระบบเบิกและคืนอุปกรณ์' },
-                    'devices': { title: 'Device Inventory', sub: 'จัดการคลังวิทยุสื่อสาร' },
-                    'employees': { title: 'Employees', sub: 'จัดการข้อมูลบุคลากร' },
-                    'reports': { title: 'Reports', sub: 'รายงานและประวัติการใช้งาน' },
-                    'settings': { title: 'Settings', sub: 'ตั้งค่าการเชื่อมต่อฐานข้อมูล' },
-                    'data': { title: 'Data Management', sub: 'นำเข้าและส่งออกข้อมูล' }
+                    'dashboard': { title: 'Welcome back.', sub: 'ภาพรวมระบบและการทำรายการวันนี้แบบเรียลไทม์' },
+                    'transactions': { title: 'Borrow & Return', sub: 'ระบบเบิก-คืนอุปกรณ์สื่อสาร' },
+                    'devices': { title: 'Device Inventory', sub: 'ตรวจสอบสถานะและจัดการคลังวิทยุสื่อสาร' },
+                    'employees': { title: 'Employee Directory', sub: 'รายชื่อบุคลากรที่มีสิทธิ์เข้าถึงระบบ' },
+                    'reports': { title: 'Analytics & Reports', sub: 'ประวัติการเข้าใช้งานและออกรายงานตามช่วงเวลา' },
+                    'settings': { title: 'System Settings', sub: 'ศูนย์ควบคุม ตั้งค่าระบบ และจัดการฐานข้อมูล' }
                 };
                 
                 if(titles[viewId]) {
@@ -256,54 +255,62 @@
 
             renderCurrentView: function() {
                 const container = document.getElementById('view-container');
+                if (!container) return;
                 container.innerHTML = ''; 
                 container.className = 'fade-in pb-20';
-                setTimeout(() => container.classList.remove('fade-in'), 400);
-
+                
                 if(views[state.currentView]) {
                     container.innerHTML = views[state.currentView]();
-                    lucide.createIcons(); 
+                    lucide.createIcons({ root: container }); 
                 }
             },
 
             renderNavigation: function() {
                 const navContainer = document.getElementById('nav-container');
-                navContainer.innerHTML = '';
+                if (!navContainer) return;
+                navContainer.innerHTML = `<p class="px-5 text-[10px] font-black tracking-[0.2em] uppercase mb-4 text-slate-500">Application</p>`;
                 
                 navItems.forEach(item => {
                     const isActive = state.currentView === item.id;
                     const btn = document.createElement('button');
-                    btn.onclick = () => { this.switchView(item.id); if(window.innerWidth < 768) this.toggleMobileMenu(); };
-                    btn.className = `w-full flex items-center space-x-3 px-4 py-3.5 rounded-xl transition-all duration-300 group ${
-                        isActive ? 'bg-indigo-600/10 text-indigo-500 font-bold' : 'text-secondary hover-item'
+                    btn.onclick = () => { this.switchView(item.id); if(state.isMobileMenuOpen) this.toggleMobileMenu(); };
+                    btn.className = `w-full flex items-center space-x-3 px-5 py-3.5 rounded-2xl transition-all duration-300 group relative overflow-hidden ${
+                        isActive ? 'text-white' : 'text-slate-400 hover:text-slate-100 hover:bg-white/5'
                     }`;
                     btn.innerHTML = `
-                        <i data-lucide="${item.icon}" class="w-5 h-5 ${isActive ? 'scale-110' : ''}"></i>
-                        <span class="tracking-wide">${item.label}</span>
+                        ${isActive ? '<div class="absolute inset-0 bg-gradient-to-r from-indigo-600 to-purple-600 opacity-90"></div>' : ''}
+                        <div class="relative z-10 flex items-center w-full">
+                            <i data-lucide="${item.icon}" class="w-5 h-5 mr-4 ${isActive ? 'scale-110 drop-shadow-[0_0_6px_rgba(255,255,255,0.4)]' : 'group-hover:scale-110'}"></i>
+                            <span class="font-semibold text-sm">${item.label}</span>
+                        </div>
                     `;
                     navContainer.appendChild(btn);
                 });
 
                 const footer = document.getElementById('nav-footer');
                 const isSettings = state.currentView === 'settings';
-                const isData = state.currentView === 'data';
-                
                 footer.innerHTML = `
-                    <button onclick="app.switchView('data')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all hover-item ${isData ? 'text-indigo-500 font-bold' : 'text-secondary'}">
-                        <i data-lucide="database" class="w-5 h-5"></i> <span>จัดการข้อมูล</span>
+                    <button onclick="app.switchView('settings')" class="w-full flex items-center space-x-3 px-5 py-3.5 rounded-xl transition-all hover:item ${isSettings ? 'text-indigo-500 font-bold bg-indigo-500/5' : 'text-slate-400'}">
+                        <i data-lucide="settings" class="w-5 h-5"></i> <span class="text-sm">ตั้งค่าระบบ</span>
                     </button>
-                    <button onclick="app.switchView('settings')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all hover-item ${isSettings ? 'text-indigo-500 font-bold' : 'text-secondary'}">
-                        <i data-lucide="settings" class="w-5 h-5"></i> <span>ตั้งค่าระบบ</span>
+                    <button onclick="app.toggleTheme()" class="w-full flex items-center space-x-3 px-5 py-3.5 rounded-xl transition-all hover:item text-slate-400 mt-1">
+                        <i data-lucide="${state.theme === 'dark' ? 'sun' : 'moon'}" class="w-5 h-5"></i> <span class="text-sm">${state.theme === 'dark' ? 'โหมดสว่าง' : 'โหมดมืด'}</span>
                     </button>
-                    <button onclick="app.toggleTheme()" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all hover-item text-secondary mt-2 border-t border-slate-500/20">
-                        <i data-lucide="${state.theme === 'dark' ? 'sun' : 'moon'}" class="w-5 h-5"></i> 
-                        <span>${state.theme === 'dark' ? 'โหมดสว่าง' : 'โหมดมืด'}</span>
+                    <button onclick="app.handleLogout()" class="w-full flex items-center space-x-3 px-5 py-3.5 rounded-xl transition-all hover:text-rose-500 text-slate-500 border-t border-slate-500/10 mt-2 pt-3">
+                        <i data-lucide="log-out" class="w-5 h-5"></i> <span class="text-sm">ออกจากระบบ</span>
                     </button>
                 `;
                 lucide.createIcons({ root: navContainer });
                 lucide.createIcons({ root: footer });
             },
 
+            toggleMobileMenu: function() {
+                state.isMobileMenuOpen = !state.isMobileMenuOpen;
+                const sidebar = document.getElementById('sidebar');
+                if(state.isMobileMenuOpen) sidebar.classList.remove('-translate-x-full');
+                else sidebar.classList.add('-translate-x-full');
+            },
+            
             getStatusHTML: function(status) {
                 if (status === 'available') return '<span class="px-3 py-1 rounded-md text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">ว่าง</span>';
                 if (status === 'borrowed') return '<span class="px-3 py-1 rounded-md text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">ถูกยืม</span>';
@@ -315,7 +322,6 @@
         // ==========================================
         // 3. ACTION HANDLERS
         // ==========================================
-        
         function setTransType(type) {
             state.transForm.type = type;
             state.transForm.selectedDevices = [];
@@ -334,24 +340,20 @@
             const type = state.transForm.type;
             const devs = state.transForm.selectedDevices;
             
-            // Get values from inputs (which can be mapped from Datalist)
             const empInput = document.getElementById('trans-emp')?.value || '';
             const location = document.getElementById('trans-loc')?.value || '-';
             const note = document.getElementById('trans-note').value;
 
-            if (devs.length === 0) return alert('กรุณาเลือกอุปกรณ์อย่างน้อย 1 รายการ');
+            if (devs.length === 0) return alert('❌ กรุณาเลือกอุปกรณ์อย่างน้อย 1 รายการ');
             
             let finalEmpId = empInput;
             if (type === 'borrow') {
-                if (!empInput) return alert('กรุณาระบุผู้เบิก');
-                // Extract ID if user selected from datalist format "EMP-001 - Name"
-                if(empInput.includes(' - ')) finalEmpId = empInput.split(' - ')[0];
-                
-                if (!location) return alert('กรุณาระบุสถานที่');
+                if (!empInput) return alert('❌ กรุณาระบุชื่อผู้เบิก');
+                if (empInput.includes(' - ')) finalEmpId = empInput.split(' - ')[0]; 
+                if (!location) return alert('❌ กรุณาระบุสถานที่ใช้งาน');
             } else {
-                // If return, get borrower from first device
-                const d = state.devices.find(x => x.id === devs[0]);
-                finalEmpId = d?.assignedTo || '';
+                const activeDev = state.devices.find(x => x.id === devs[0]);
+                finalEmpId = activeDev?.assignedTo || '';
             }
 
             const timestamp = new Date().toISOString();
@@ -359,8 +361,7 @@
                 id: `T-${Date.now()}-${i}`,
                 deviceId: devId,
                 employeeId: type === 'borrow' ? finalEmpId : null,
-                type, timestamp, note, 
-                location: type === 'borrow' ? location : '-'
+                type, timestamp, note, location: type === 'borrow' ? location : '-'
             }));
 
             state.transactions = [...newTrans, ...state.transactions];
@@ -377,46 +378,59 @@
 
             app.syncData({ action: 'transaction', newTransactions: newTrans, updatedDevices });
             state.transForm = { type: 'borrow', selectedDevices: [] };
-            alert('บันทึกรายการสำเร็จ!');
+            alert(`🎉 บันทึกรายการสำเร็จจำนวน ${selectedDevices.length} เครื่อง`);
             app.switchView('dashboard');
         }
 
-        function addDevice(e) {
+        function submitDevice(e) {
             e.preventDefault();
-            const id = document.getElementById('dev-id').value;
-            if(state.devices.find(d => d.id === id)) return alert('รหัสเครื่องซ้ำ');
-            const newDev = { id, model: document.getElementById('dev-model').value, serial: document.getElementById('dev-sn').value, status: 'available' };
+            const id = document.getElementById('dev-id').value.toUpperCase().trim();
+            const model = document.getElementById('dev-model').value.trim();
+            const serial = document.getElementById('dev-sn').value.trim();
+
+            if (state.devices.find(d => d.id === id)) return alert('❌ รหัสอุปกรณ์นี้มีอยู่ในระบบคลังแล้วครับ');
+
+            const newDev = { id, model, serial, status: 'available', assignedTo: null };
             state.devices.push(newDev);
+            
             app.syncData({ action: 'addDevice', newDevice: newDev });
+            alert('📥 เพิ่มวิทยุสื่อสารเข้าคลังเรียบร้อยครับ');
             app.renderCurrentView();
         }
 
-        function addEmployee(e) {
+        function submitEmployee(e) {
             e.preventDefault();
-            const id = document.getElementById('emp-id').value;
-            if(state.employees.find(x => x.id === id)) return alert('รหัสซ้ำ');
-            const newEmp = { id, name: document.getElementById('emp-name').value, department: document.getElementById('emp-dept').value, phone: document.getElementById('emp-phone').value };
+            const id = document.getElementById('emp-id').value.toUpperCase().trim();
+            const name = document.getElementById('emp-name').value.trim();
+            const department = document.getElementById('emp-dept').value.trim();
+            const phone = document.getElementById('emp-phone').value.trim();
+
+            if (state.employees.find(x => x.id === id)) return alert('❌ รหัสพนักงานนี้มีอยู่แล้วครับ');
+
+            const newEmp = { id, name, department, phone };
             state.employees.push(newEmp);
+            
             app.syncData({ action: 'addEmployee', newEmployee: newEmp });
+            alert('👤 ลงทะเบียนรายชื่อบุคลากรใหม่สำเร็จ');
             app.renderCurrentView();
         }
 
-        function updateDeviceStatus(id, newStatus) {
-            if(newStatus === 'maintenance') {
-                const note = prompt('ระบุอาการเสีย:');
-                if(!note) return;
-                const newTrans = { id: `M-${Date.now()}`, deviceId: id, employeeId: null, type: 'maintenance', timestamp: new Date().toISOString(), note: `ส่งซ่อม: ${note}`, location: '-' };
-                state.transactions.unshift(newTrans);
-                state.devices = state.devices.map(d => d.id === id ? {...d, status: 'maintenance'} : d);
-                app.syncData({ action: 'transaction', newTransactions: [newTrans], updatedDevices: [{id, status: 'maintenance', assignedTo: ''}] });
-            } else {
-                state.devices = state.devices.map(d => d.id === id ? {...d, status: newStatus} : d);
-                app.syncData({ action: 'transaction', newTransactions: [], updatedDevices: [{id, status: newStatus, assignedTo: ''}] });
+        function changeDeviceStatus(id, targetStatus) {
+            let note = '-';
+            if(targetStatus === 'maintenance') {
+                note = prompt('🛠️ กรุณาระบุอาการเสีย/ปัญหาการใช้งาน:');
+                if(!note) return; 
             }
+            
+            const newTrans = { id: `M-${Date.now()}`, deviceId: id, employeeId: null, type: targetStatus, timestamp: new Date().toISOString(), note: targetStatus==='maintenance'?`แจ้งซ่อม: ${note}`:'ช่างตรวจสภาพและปลดล็อกเครื่อง', location: '-' };
+            state.transactions.unshift(newTrans);
+            
+            state.devices = state.devices.map(d => d.id === id ? { ...d, status: targetStatus, assignedTo: null } : d);
+            app.syncData({ action: 'transaction', newTransactions: [newTrans], updatedDevices: [{ id, status: targetStatus, assignedTo: '' }] });
             app.renderCurrentView();
         }
 
-        function exportCSV() {
+        function executeExportCSV() {
             const start = document.getElementById('rep-start').value;
             const end = document.getElementById('rep-end').value;
             let filtered = state.transactions;
@@ -427,23 +441,115 @@
                 filtered = filtered.filter(t => new Date(t.timestamp) <= eDate);
             }
 
-            if(filtered.length === 0) return alert('ไม่มีข้อมูล');
+            if(filtered.length === 0) return alert('ไม่มีข้อมูลในช่วงเวลาที่ระบุ');
 
             const rows = filtered.map(t => {
                 const emp = state.employees.find(e => e.id === t.employeeId);
-                return `"${new Date(t.timestamp).toLocaleString('th-TH')}","${t.type === 'borrow' ? 'เบิก' : t.type==='maintenance'?'ซ่อม':'คืน'}","${t.deviceId}","${emp?emp.name:'-'}","${t.location||'-'}","${t.note||'-'}"`;
+                const typeLabel = t.type==='borrow'?'เบิก':t.type==='maintenance'?'ซ่อม':'คืน';
+                return `"${new Date(t.timestamp).toLocaleString('th-TH')}","${typeLabel}","${t.deviceId}","${emp?emp.name:'-'}","${t.location||'-'}","${t.note||'-'}"`;
             });
             const csv = `\ufeff"วัน-เวลา","รายการ","รหัสเครื่อง","ผู้ทำรายการ","สถานที่","หมายเหตุ"\n` + rows.join('\n');
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = `Report_${Date.now()}.csv`; a.click();
+            a.href = url; a.download = `CommsControl_Report_${Date.now()}.csv`; a.click();
+        }
+
+        function exportBackupJSON() {
+            const backup = { devices: state.devices, employees: state.employees, transactions: state.transactions };
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `CommsControl_Backup_${new Date().toISOString().slice(0,10)}.json`; a.click();
+        }
+
+        function importBackupJSON(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                try {
+                    const data = JSON.parse(evt.target.result);
+                    if(confirm(`⚠️ ยืนยันการกู้คืนข้อมูลทับข้อมูลปัจจุบัน?\n- วิทยุ ${data.devices?.length || 0} เครื่อง\n- บุคลากร ${data.employees?.length || 0} คน`)) {
+                        if(data.devices) state.devices = data.devices;
+                        if(data.employees) state.employees = data.employees;
+                        if(data.transactions) state.transactions = data.transactions;
+                        alert('✅ กู้คืนข้อมูลเข้าระบบ Local สำเร็จ!');
+                        app.renderCurrentView();
+                    }
+                } catch(err) { alert('❌ รูปแบบไฟล์ไม่ถูกต้อง'); }
+            };
+            reader.readAsText(file);
         }
 
         // ==========================================
-        // 4. HTML VIEWS GENERATORS
+        // 5. VIEWS TEMPLATE SYSTEM
         // ==========================================
         const views = {
+            login: () => `
+                <div class="min-h-screen flex items-center justify-center p-4">
+                    <div class="w-full max-w-md bg-panel border rounded-[2.5rem] p-8 md:p-10 shadow-2xl relative overflow-hidden">
+                        <div class="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-indigo-500/10 blur-xl"></div>
+                        <div class="flex flex-col items-center mb-8">
+                            <div class="p-4 bg-gradient-to-tr from-indigo-500 via-purple-500 to-indigo-500 rounded-2xl shadow-xl text-white mb-4">
+                                <i data-lucide="radio" class="w-8 h-8"></i>
+                            </div>
+                            <h2 class="text-3xl font-black tracking-tight text-primary">CommsControl</h2>
+                            <p class="text-sm font-medium text-secondary mt-1">ลงชื่อเข้าใช้งานระบบเพื่อควบคุมอุปกรณ์</p>
+                        </div>
+                        <form onsubmit="app.handleLogin(event)" class="space-y-5">
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider mb-2 text-secondary">Username</label>
+                                <input type="text" id="login-user" required placeholder="admin หรือ user" class="w-full p-4 rounded-xl input-field border outline-none focus:border-indigo-500 font-bold">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider mb-2 text-secondary">Password</label>
+                                <input type="password" id="login-pass" required placeholder="••••••••" class="w-full p-4 rounded-xl input-field border outline-none focus:border-indigo-500 font-bold">
+                            </div>
+                            <button type="submit" class="w-full py-4 rounded-xl font-black tracking-wide text-white bg-gradient-to-r from-indigo-600 to-purple-600 shadow-xl shadow-indigo-500/20 hover:opacity-90 active:scale-95 transition-all mt-4">
+                                Sign In
+                            </button>
+                        </form>
+                        <p class="text-center text-xs text-secondary mt-6 border-t border-slate-500/10 pt-4">ระบบบริหารความปลอดภัยและล็อกเอาต์อัตโนมัติ</p>
+                    </div>
+                </div>
+            `,
+
+            mainStructure: () => `
+                <div class="min-h-screen flex flex-col md:flex-row">
+                    <div class="md:hidden px-5 py-4 flex justify-between items-center bg-panel border-b sticky top-0 z-40">
+                        <div class="flex items-center space-x-3">
+                            <div class="p-2 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-lg text-white"><i data-lucide="radio" class="w-5 h-5"></i></div>
+                            <span class="font-black text-xl text-primary">Comms.</span>
+                        </div>
+                        <button onclick="app.toggleMobileMenu()" class="p-2 rounded-lg text-secondary"><i data-lucide="menu"></i></button>
+                    </div>
+
+                    <aside id="sidebar" class="fixed md:sticky top-0 left-0 z-30 h-screen w-64 flex-shrink-0 flex flex-col transform -translate-x-full md:translate-x-0 transition-all duration-300 shadow-2xl bg-panel border md:border-y-0 md:border-l-0">
+                        <div class="p-6 hidden md:flex items-center space-x-3">
+                            <div class="p-2 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl text-white"><i data-lucide="radio" class="w-5 h-5"></i></div>
+                            <span class="font-black text-xl text-primary">CommsControl</span>
+                        </div>
+                        <nav class="px-3 py-2 space-y-1.5 flex-1 overflow-y-auto hide-scroll" id="nav-container"></nav>
+                        <div class="p-4 m-3 rounded-2xl bg-white/5 border border-white/5 space-y-1.5" id="nav-footer"></div>
+                    </aside>
+
+                    <main class="flex-1 p-5 md:p-8 lg:p-10 w-full overflow-y-auto">
+                        <header class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4 fade-in">
+                            <div>
+                                <h1 id="page-title" class="text-3xl font-black text-primary"></h1>
+                                <p id="page-subtitle" class="text-sm text-secondary"></p>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <button onclick="app.fetchData()" class="p-2.5 rounded-xl bg-panel border transition hover-item text-secondary"><i data-lucide="refresh-cw" class="w-4 h-4"></i></button>
+                                <div class="px-4 py-2.5 rounded-xl bg-panel border flex items-center space-x-2 cursor-pointer" onclick="app.switchView('settings')"><div class="w-2 h-2 rounded-full" id="status-dot"></div><span class="text-xs font-bold text-secondary" id="status-text"></span></div>
+                            </div>
+                        </header>
+                        <div id="view-container"></div>
+                    </main>
+                </div>
+            `,
+
             dashboard: () => {
                 const total = state.devices.length;
                 const avail = state.devices.filter(d => d.status === 'available').length;
@@ -455,28 +561,35 @@
                     const typeLabel = t.type === 'borrow' ? 'เบิก' : t.type === 'maintenance' ? 'ซ่อม' : 'คืน';
                     const typeColor = t.type === 'borrow' ? 'amber' : t.type === 'maintenance' ? 'rose' : 'emerald';
                     return `
-                        <tr class="border-b border-slate-500/10 hover-item">
-                            <td class="p-4 text-sm text-secondary">${new Date(t.timestamp).toLocaleString('th-TH', {dateStyle:'short', timeStyle:'short'})}</td>
-                            <td class="p-4"><span class="px-2 py-1 rounded text-xs font-bold bg-${typeColor}-500/10 text-${typeColor}-500">${typeLabel}</span></td>
+                        <tr class="border-b border-slate-500/10 hover-item text-sm">
+                            <td class="p-4 text-secondary">${new Date(t.timestamp).toLocaleString('th-TH', {dateStyle:'short', timeStyle:'short'})}</td>
+                            <td class="p-4"><span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-${typeColor}-500/10 text-${typeColor}-500 border border-${typeColor}-500/20">${typeLabel}</span></td>
                             <td class="p-4 font-bold text-primary">${t.deviceId}</td>
-                            <td class="p-4 text-sm text-secondary">${emp ? emp.name : '-'}</td>
+                            <td class="p-4 text-secondary">${emp ? emp.name : '-'}</td>
+                            <td class="p-4 text-secondary text-xs">${t.location || '-'}</td>
                         </tr>
                     `;
-                }).join('') || `<tr><td colspan="4" class="p-6 text-center text-secondary">ไม่มีประวัติ</td></tr>`;
+                }).join('') || `<tr><td colspan="5" class="p-8 text-center text-secondary">ไม่มีรายการเคลื่อนไหววันนี้</td></tr>`;
 
                 return `
                     <div class="space-y-6">
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div class="bg-panel p-5 rounded-2xl border"><p class="text-3xl font-black text-blue-500">${total}</p><p class="text-xs text-secondary mt-1">วิทยุทั้งหมด</p></div>
-                            <div class="bg-panel p-5 rounded-2xl border"><p class="text-3xl font-black text-emerald-500">${avail}</p><p class="text-xs text-secondary mt-1">พร้อมใช้งาน</p></div>
-                            <div class="bg-panel p-5 rounded-2xl border"><p class="text-3xl font-black text-amber-500">${borr}</p><p class="text-xs text-secondary mt-1">ถูกยืม</p></div>
-                            <div class="bg-panel p-5 rounded-2xl border"><p class="text-3xl font-black text-rose-500">${maint}</p><p class="text-xs text-secondary mt-1">ส่งซ่อม</p></div>
+                        <div class="p-6 bg-gradient-to-r from-indigo-900/30 to-purple-900/10 border border-white/5 rounded-3xl flex items-center justify-between">
+                            <div>
+                                <h3 class="text-xl font-bold text-primary">สวัสดีคุณ, ${state.user?.username} (${state.user?.role})</h3>
+                                <p class="text-xs text-secondary mt-1">ระบบเฝ้าติดตามสถิติคลังสื่อสารแบบอัตโนมัติ</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div class="bg-panel p-5 rounded-2xl border"><p class="text-3xl font-black text-blue-500">${total}</p><p class="text-xs text-secondary mt-1 font-bold">เครื่องทั้งหมด</p></div>
+                            <div class="bg-panel p-5 rounded-2xl border"><p class="text-3xl font-black text-emerald-500">${avail}</p><p class="text-xs text-secondary mt-1 font-bold">พร้อมใช้งาน (คลัง)</p></div>
+                            <div class="bg-panel p-5 rounded-2xl border"><p class="text-3xl font-black text-amber-500">${borr}</p><p class="text-xs text-secondary mt-1 font-bold">ถูกเบิกปฏิบัติงาน</p></div>
+                            <div class="bg-panel p-5 rounded-2xl border"><p class="text-3xl font-black text-rose-500">${maint}</p><p class="text-xs text-secondary mt-1 font-bold">ชำรุด/ส่งซ่อม</p></div>
                         </div>
                         <div class="bg-panel border rounded-2xl overflow-hidden">
-                            <div class="p-5 border-b border-slate-500/10 font-bold text-primary">ประวัติ 5 รายการล่าสุด</div>
+                            <div class="p-5 border-b border-slate-500/10 font-bold text-primary flex items-center"><i data-lucide="clock" class="w-4 h-4 mr-2"></i> ประวัติ 5 รายการล่าสุด</div>
                             <div class="overflow-x-auto">
-                                <table class="w-full text-left min-w-[500px]">
-                                    <thead><tr class="text-xs text-secondary bg-black/10"><th class="p-4">เวลา</th><th class="p-4">รายการ</th><th class="p-4">เครื่อง</th><th class="p-4">ผู้ทำรายการ</th></tr></thead>
+                                <table class="w-full text-left min-w-[600px]">
+                                    <thead class="text-xs text-secondary table-header"><tr><th class="p-4">วัน-เวลา</th><th class="p-4">รายการ</th><th class="p-4">รหัสเครื่อง</th><th class="p-4">ผู้ทำรายการ</th><th class="p-4">จุดใช้งาน</th></tr></thead>
                                     <tbody>${trRows}</tbody>
                                 </table>
                             </div>
@@ -491,61 +604,59 @@
                 
                 const devsHtml = list.length > 0 ? list.map(d => {
                     const isSel = t.selectedDevices.includes(d.id);
-                    const cBorder = isSel ? (t.type==='borrow'?'border-indigo-500 bg-indigo-500/10':'border-emerald-500 bg-emerald-500/10') : 'border-slate-500/20';
-                    const cIcon = isSel ? (t.type==='borrow'?'text-indigo-500':'text-emerald-500') : 'text-secondary';
-                    const empName = t.type === 'return' ? `<p class="text-xs mt-2 text-amber-500">ยืมโดย: ${state.employees.find(e => e.id === d.assignedTo)?.name || d.assignedTo}</p>` : '';
+                    const cBorder = isSel ? (t.type==='borrow'?'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/10':'border-emerald-500 bg-emerald-500/10 shadow-lg shadow-emerald-500/10') : 'border-slate-500/10 bg-black/10';
+                    const cIcon = isSel ? (t.type==='borrow'?'text-indigo-500':'text-emerald-500') : 'text-slate-500';
+                    const empName = t.type === 'return' ? `<p class="text-[11px] mt-2 text-amber-400 font-bold">👤 ยืมโดย: ${state.employees.find(e => e.id === d.assignedTo)?.name.split(' ')[0] || d.assignedTo}</p>` : '';
                     
                     return `
-                        <div onclick="toggleDeviceSelect('${d.id}')" class="p-4 rounded-xl border-2 cursor-pointer transition ${cBorder}">
+                        <div onclick="toggleDeviceSelect('${d.id}')" class="p-4 rounded-xl border-2 cursor-pointer transition transform hover:-translate-y-0.5 active:scale-95 ${cBorder}">
                             <div class="flex justify-between mb-2"><i data-lucide="radio" class="w-5 h-5 ${cIcon}"></i><i data-lucide="${isSel?'check-square':'square'}" class="w-5 h-5 ${cIcon}"></i></div>
-                            <p class="font-bold text-primary">${d.id}</p>
+                            <p class="font-black text-primary text-base tracking-wide">${d.id}</p>
+                            <p class="text-[11px] text-secondary mt-0.5">${d.model}</p>
                             ${empName}
                         </div>
                     `;
-                }).join('') : `<div class="col-span-full p-8 text-center border border-dashed border-slate-500/30 rounded-xl text-secondary">ไม่มีอุปกรณ์</div>`;
+                }).join('') : `<div class="col-span-full p-8 text-center border border-dashed border-slate-500/30 rounded-xl text-secondary">ไม่มีอุปกรณ์ให้ทำรายการ</div>`;
 
-                // DataList for Autocomplete
                 const empOptions = state.employees.map(e => `<option value="${e.id} - ${e.name}">`).join('');
-                
-                // Extract unique locations from past transactions for datalist
                 const uniqueLocs = [...new Set(state.transactions.map(tr => tr.location).filter(l => l && l !== '-'))];
                 const locOptions = uniqueLocs.map(l => `<option value="${l}">`).join('');
 
                 return `
-                    <div class="max-w-4xl mx-auto">
-                        <div class="flex p-1 bg-panel border rounded-xl mb-6">
-                            <button onclick="setTransType('borrow')" class="flex-1 py-3 font-bold rounded-lg ${t.type==='borrow'?'bg-indigo-600 text-white':'text-secondary'}">เบิกอุปกรณ์</button>
-                            <button onclick="setTransType('return')" class="flex-1 py-3 font-bold rounded-lg ${t.type==='return'?'bg-emerald-600 text-white':'text-secondary'}">คืนอุปกรณ์</button>
+                    <div class="max-w-4xl mx-auto space-y-6">
+                        <div class="flex p-1.5 bg-panel border rounded-2xl">
+                            <button onclick="setTransType('borrow')" class="flex-1 py-3 font-bold text-sm rounded-xl transition ${t.type==='borrow'?'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20':'text-slate-400 hover:text-white'}">เบิกอุปกรณ์</button>
+                            <button onclick="setTransType('return')" class="flex-1 py-3 font-bold text-sm rounded-xl transition ${t.type==='return'?'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20':'text-slate-400 hover:text-white'}">คืนอุปกรณ์</button>
                         </div>
 
-                        <form onsubmit="handleTransaction(event)" class="bg-panel border p-6 md:p-8 rounded-2xl space-y-6">
+                        <form onsubmit="handleTransaction(event)" class="bg-panel border p-6 md:p-8 rounded-[2rem] space-y-6">
                             <div>
-                                <label class="block font-bold text-primary mb-3">1. เลือกอุปกรณ์ (${t.selectedDevices.length})</label>
-                                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">${devsHtml}</div>
+                                <label class="block font-black text-primary text-base mb-3">1. เลือกวิทยุสื่อสาร <span class="text-xs font-normal text-secondary ml-1">(เลือกได้หลายเครื่อง)</span></label>
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 max-h-64 overflow-y-auto pr-1 custom-scrollbar">${devsHtml}</div>
                             </div>
 
                             ${t.type === 'borrow' ? `
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-500/20 pt-6">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-500/10 pt-6">
                                     <div>
-                                        <label class="block font-bold text-primary mb-2">2. ผู้เบิก (พิมพ์ค้นหา)</label>
-                                        <input type="text" id="trans-emp" list="emp-list" required placeholder="รหัส หรือ ชื่อ..." class="w-full p-3 rounded-xl input-field border outline-none focus:border-indigo-500">
+                                        <label class="block font-bold text-sm text-primary mb-2">2. พนักงานผู้เบิก (พิมพ์เพื่อค้นหา)</label>
+                                        <input type="text" id="trans-emp" list="emp-list" required placeholder="พิมพ์ชื่อหรือรหัสพนักงาน..." class="w-full p-3.5 rounded-xl input-field border outline-none focus:border-indigo-500 font-bold text-sm" autoComplete="off">
                                         <datalist id="emp-list">${empOptions}</datalist>
                                     </div>
                                     <div>
-                                        <label class="block font-bold text-primary mb-2">3. สถานที่ (พิมพ์ค้นหา)</label>
-                                        <input type="text" id="trans-loc" list="loc-list" required placeholder="สถานที่ใช้งาน..." class="w-full p-3 rounded-xl input-field border outline-none focus:border-indigo-500">
+                                        <label class="block font-bold text-sm text-primary mb-2">3. สถานที่ปฏิบัติงาน (พิมพ์เพื่อค้นหา)</label>
+                                        <input type="text" id="trans-loc" list="loc-list" required placeholder="ระบุจุด/สถานที่ใช้งาน..." class="w-full p-3.5 rounded-xl input-field border outline-none focus:border-indigo-500 font-bold text-sm" autoComplete="off">
                                         <datalist id="loc-list">${locOptions}</datalist>
                                     </div>
                                 </div>
                             ` : ''}
 
-                            <div class="border-t border-slate-500/20 pt-6">
-                                <label class="block font-bold text-primary mb-2">หมายเหตุ</label>
-                                <input type="text" id="trans-note" placeholder="เพิ่มเติม..." class="w-full p-3 rounded-xl input-field border outline-none focus:border-indigo-500">
+                            <div class="border-t border-slate-500/10 pt-6">
+                                <label class="block font-bold text-sm text-primary mb-2">หมายเหตุเพิ่มเติม</label>
+                                <input type="text" id="trans-note" placeholder="วัตถุประสงค์ หรือ สภาพเครื่อง..." class="w-full p-3.5 rounded-xl input-field border outline-none focus:border-indigo-500 text-sm">
                             </div>
 
-                            <button type="submit" class="w-full py-4 rounded-xl font-bold text-white ${t.type==='borrow'?'bg-indigo-600':'bg-emerald-600'}">
-                                ยืนยันทำรายการ
+                            <button type="submit" class="w-full py-4.5 rounded-xl font-black text-white text-base ${t.type==='borrow'?'bg-indigo-600 hover:bg-indigo-500':'bg-emerald-600 hover:bg-emerald-500'} active:scale-[0.99] transition mt-2">
+                                ยืนยันข้อมูลรายการ (${t.selectedDevices.length} เครื่อง)
                             </button>
                         </form>
                     </div>
@@ -553,58 +664,63 @@
             },
 
             devices: () => {
-                const list = state.devices.map(d => `
-                    <div class="bg-panel border p-5 rounded-xl flex flex-col">
-                        <div class="flex justify-between items-start mb-3">
-                            <i data-lucide="radio" class="text-secondary"></i>
-                            ${app.getStatusBadge(d.status)}
+                const list = state.devices.map(d => {
+                    const name = state.employees.find(e => e.id === d.assignedTo)?.name || d.assignedTo;
+                    const actionBtn = d.status === 'borrowed' 
+                        ? `<span class="text-[11px] font-bold text-amber-500 bg-amber-500/10 p-2 rounded-xl border border-amber-500/10 w-full text-center">👤 ถือครองโดย: ${name}</span>`
+                        : `<button onclick="changeDeviceStatus('${d.id}', '${d.status==='maintenance'?'available':'maintenance'}')" class="text-xs font-bold px-3 py-2 rounded-xl w-full border ${d.status==='maintenance'?'bg-emerald-500/10 text-emerald-500 border-emerald-500/20':'bg-rose-500/10 text-rose-500 border-rose-500/20 hover:bg-rose-500/20'} transition">
+                                ${d.status==='maintenance'?'🔧 ปลดล็อกเครื่อง':'🛠️ แจ้งส่งซ่อม'}
+                           </button>`;
+
+                    return `
+                        <div class="bg-panel border p-5 rounded-2xl flex flex-col hover:border-slate-500/30 transition">
+                            <div class="flex justify-between items-start mb-3">
+                                <div class="p-2 bg-white/5 rounded-lg text-secondary"><i data-lucide="radio" class="w-5 h-5"></i></div>
+                                ${app.getStatusHTML(d.status)}
+                            </div>
+                            <h3 class="font-black text-xl text-primary tracking-wide">${d.id}</h3>
+                            <p class="text-xs text-secondary mt-0.5 font-bold">${d.model}</p>
+                            <p class="text-[11px] text-slate-500 mt-1">S/N: ${d.serial || '-'}</p>
+                            <div class="mt-5 pt-3 border-t border-slate-500/5 flex">${actionBtn}</div>
                         </div>
-                        <h3 class="font-bold text-lg text-primary">${d.id}</h3>
-                        <p class="text-xs text-secondary flex-1">${d.model}</p>
-                        <div class="mt-4 flex space-x-2">
-                            ${d.status !== 'borrowed' ? `
-                                <button onclick="updateDeviceStatus('${d.id}', '${d.status==='maintenance'?'available':'maintenance'}')" class="text-xs font-bold px-3 py-1.5 rounded bg-slate-500/20 text-primary hover:bg-slate-500/40 w-full">
-                                    ${d.status==='maintenance'?'ตั้งพร้อมใช้':'แจ้งซ่อม'}
-                                </button>
-                            ` : `<span class="text-xs text-center w-full py-1.5 text-secondary">ถูกยืมโดย ${d.assignedTo}</span>`}
-                        </div>
-                    </div>
-                `).join('');
+                    `;
+                }).join('');
 
                 return `
                     <div class="space-y-6">
-                        <form onsubmit="addDevice(event)" class="bg-panel border p-5 rounded-xl grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                            <div><label class="text-xs text-secondary">รหัส (ID)</label><input type="text" id="dev-id" required class="w-full p-2.5 rounded-lg input-field border mt-1"></div>
-                            <div><label class="text-xs text-secondary">รุ่น</label><input type="text" id="dev-model" required class="w-full p-2.5 rounded-lg input-field border mt-1"></div>
-                            <div><label class="text-xs text-secondary">S/N</label><input type="text" id="dev-sn" class="w-full p-2.5 rounded-lg input-field border mt-1"></div>
-                            <button type="submit" class="bg-indigo-600 text-white font-bold p-2.5 rounded-lg h-[42px]">เพิ่มอุปกรณ์</button>
+                        <form onsubmit="submitDevice(event)" class="bg-panel border p-5 rounded-2xl grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                            <div><label class="text-xs font-bold text-secondary">รหัสเครื่อง (ID)</label><input type="text" id="dev-id" required placeholder="เช่น R-004" class="w-full p-2.5 rounded-xl input-field border mt-1 font-bold text-sm"></div>
+                            <div><label class="text-xs font-bold text-secondary">รุ่น (Model)</label><input type="text" id="dev-model" required placeholder="เช่น Icom IC-V80" class="w-full p-2.5 rounded-xl input-field border mt-1 font-bold text-sm"></div>
+                            <div><label class="text-xs font-bold text-secondary">Serial Number</label><input type="text" id="dev-sn" placeholder="ระบุ S/N..." class="w-full p-2.5 rounded-xl input-field border mt-1 font-bold text-sm"></div>
+                            <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm p-2.5 rounded-xl h-[44px]">เพิ่มอุปกรณ์เข้าคลัง</button>
                         </form>
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">${list}</div>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">${list}</div>
                     </div>
                 `;
             },
 
             employees: () => {
                 const list = state.employees.map(e => `
-                    <tr class="border-b border-slate-500/10 hover-item">
-                        <td class="p-4 font-bold text-primary">${e.id}</td>
-                        <td class="p-4 text-primary">${e.name}</td>
-                        <td class="p-4"><span class="px-2 py-1 bg-slate-500/20 rounded text-xs">${e.department}</span></td>
-                        <td class="p-4 text-secondary">${e.phone || '-'}</td>
+                    <tr class="border-b border-slate-500/10 hover-item text-sm">
+                        <td class="p-4 font-black text-primary tracking-wide">${e.id}</td>
+                        <td class="p-4 font-bold text-primary">${e.name}</td>
+                        <td class="p-4"><span class="px-3 py-1 bg-slate-500/10 border border-slate-500/20 text-secondary rounded-lg text-xs font-semibold">${e.department}</span></td>
+                        <td class="p-4 text-secondary font-medium tracking-wide">${e.phone || '-'}</td>
                     </tr>
-                `).join('');
+                `).join('') || `<tr><td colspan="4" class="p-6 text-center text-secondary">ไม่มีรายชื่อ</td></tr>`;
 
                 return `
                     <div class="space-y-6">
-                        <form onsubmit="addEmployee(event)" class="bg-panel border p-5 rounded-xl grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
-                            <div><label class="text-xs text-secondary">รหัส</label><input type="text" id="emp-id" required class="w-full p-2.5 rounded-lg input-field border mt-1"></div>
-                            <div class="md:col-span-2"><label class="text-xs text-secondary">ชื่อ-สกุล</label><input type="text" id="emp-name" required class="w-full p-2.5 rounded-lg input-field border mt-1"></div>
-                            <div><label class="text-xs text-secondary">แผนก</label><input type="text" id="emp-dept" required class="w-full p-2.5 rounded-lg input-field border mt-1"></div>
-                            <button type="submit" class="bg-indigo-600 text-white font-bold p-2.5 rounded-lg h-[42px]">เพิ่มคน</button>
+                        <form onsubmit="submitEmployee(event)" class="bg-panel border p-5 rounded-2xl grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                            <div><label class="text-xs font-bold text-secondary">รหัสบุคลากร</label><input type="text" id="emp-id" required placeholder="EMP-003" class="w-full p-2.5 rounded-xl input-field border mt-1 text-sm font-bold"></div>
+                            <div><label class="text-xs font-bold text-secondary">ชื่อ-นามสกุล</label><input type="text" id="emp-name" required placeholder="ชื่อพนักงาน" class="w-full p-2.5 rounded-xl input-field border mt-1 text-sm font-bold"></div>
+                            <div><label class="text-xs font-bold text-secondary">แผนก/ฝ่าย</label><input type="text" id="emp-dept" required placeholder="รปภ. / ช่าง" class="w-full p-2.5 rounded-xl input-field border mt-1 text-sm font-bold"></div>
+                            <div><label class="text-xs font-bold text-secondary">เบอร์ติดต่อ</label><input type="text" id="emp-phone" placeholder="08x-xxx-xxxx" class="w-full p-2.5 rounded-xl input-field border mt-1 text-sm font-bold"></div>
+                            <button type="submit" class="sm:col-span-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm p-3 rounded-xl">ลงทะเบียนบุคลากรใหม่</button>
                         </form>
-                        <div class="bg-panel border rounded-xl overflow-x-auto">
+                        <div class="bg-panel border rounded-2xl overflow-x-auto">
                             <table class="w-full text-left min-w-[600px]">
-                                <thead><tr class="text-xs text-secondary bg-black/5"><th class="p-4">รหัส</th><th class="p-4">ชื่อ</th><th class="p-4">แผนก</th><th class="p-4">เบอร์โทร</th></tr></thead>
+                                <thead class="text-xs text-secondary table-header"><tr><th class="p-4">รหัส</th><th class="p-4">ชื่อ-สกุล</th><th class="p-4">แผนก</th><th class="p-4">เบอร์โทรศัพท์</th></tr></thead>
                                 <tbody>${list}</tbody>
                             </table>
                         </div>
@@ -613,31 +729,32 @@
             },
 
             reports: () => {
-                // Table is rendered on load, export button uses current data
                 const trRows = state.transactions.map(t => {
                     const emp = state.employees.find(e => e.id === t.employeeId);
+                    const label = t.type==='borrow'?'เบิก':t.type==='maintenance'?'ซ่อม':'คืน';
+                    const color = t.type==='borrow'?'amber':t.type==='maintenance'?'rose':'emerald';
                     return `
-                        <tr class="border-b border-slate-500/10 hover-item text-sm text-primary">
-                            <td class="p-3">${new Date(t.timestamp).toLocaleDateString('th-TH')}</td>
-                            <td class="p-3">${t.type==='borrow'?'เบิก':t.type==='maintenance'?'ซ่อม':'คืน'}</td>
-                            <td class="p-3">${t.deviceId}</td>
-                            <td class="p-3">${emp ? emp.name : '-'}</td>
-                            <td class="p-3">${t.location || '-'}</td>
-                            <td class="p-3 text-secondary text-xs">${t.note || '-'}</td>
+                        <tr class="border-b border-slate-500/5 hover-item text-sm text-primary">
+                            <td class="p-4 text-secondary text-xs">${new Date(t.timestamp).toLocaleDateString('th-TH')} ${new Date(t.timestamp).toLocaleTimeString('th-TH')}</td>
+                            <td class="p-4"><span class="px-2 py-0.5 bg-${color}-500/10 text-${color}-400 border border-${color}-500/20 text-xs font-bold rounded-md">${label}</span></td>
+                            <td class="p-4 font-black">${t.deviceId}</td>
+                            <td class="p-4 font-bold text-sm">${emp ? emp.name : '-'}</td>
+                            <td class="p-4 text-xs text-secondary">${t.location || '-'}</td>
+                            <td class="p-4 text-xs text-slate-500 font-medium">${t.note || '-'}</td>
                         </tr>
                     `;
-                }).join('');
+                }).join('') || `<tr><td colspan="6" class="p-10 text-center text-secondary">ไม่มีประวัติรายงานข้อมูล</td></tr>`;
 
                 return `
                     <div class="space-y-6">
-                        <div class="bg-panel border p-5 rounded-xl flex flex-wrap gap-4 items-end">
-                            <div><label class="text-xs text-secondary block mb-1">ตั้งแต่วันที่</label><input type="date" id="rep-start" class="p-2.5 rounded-lg input-field border"></div>
-                            <div><label class="text-xs text-secondary block mb-1">ถึงวันที่</label><input type="date" id="rep-end" class="p-2.5 rounded-lg input-field border"></div>
-                            <button onclick="exportCSV()" class="bg-emerald-600 text-white font-bold px-4 py-2.5 rounded-lg flex items-center h-[42px]"><i data-lucide="download" class="w-4 h-4 mr-2"></i> Export CSV</button>
+                        <div class="bg-panel border p-5 rounded-2xl flex flex-wrap gap-4 items-end">
+                            <div class="w-full sm:w-auto"><label class="text-xs font-bold text-secondary block mb-1">ตั้งแต่วันที่</label><input type="date" id="rep-start" class="p-2.5 rounded-xl input-field border text-sm font-bold"></div>
+                            <div class="w-full sm:w-auto"><label class="text-xs font-bold text-secondary block mb-1">ถึงวันที่</label><input type="date" id="rep-end" class="p-2.5 rounded-xl input-field border text-sm font-bold"></div>
+                            <button onclick="executeExportCSV()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm px-6 py-3 rounded-xl flex items-center h-[42px] shadow-lg shadow-emerald-600/10"><i data-lucide="download" class="w-4 h-4 mr-2"></i> ส่งออกตารางรายงาน (CSV)</button>
                         </div>
-                        <div class="bg-panel border rounded-xl overflow-x-auto max-h-[60vh] relative">
+                        <div class="bg-panel border rounded-2xl overflow-x-auto max-h-[60vh] relative shadow-inner">
                             <table class="w-full text-left min-w-[800px]">
-                                <thead class="sticky top-0 bg-slate-800 text-slate-300 text-xs"><tr class="shadow-sm"><th class="p-3">วันที่</th><th class="p-3">รายการ</th><th class="p-3">เครื่อง</th><th class="p-3">คนทำรายการ</th><th class="p-3">สถานที่</th><th class="p-3">หมายเหตุ</th></tr></thead>
+                                <thead class="sticky top-0 table-header border-b border-slate-500/10 text-xs"><tr class=""><th class="p-4">วันที่</th><th class="p-4">รายการ</th><th class="p-4">เครื่อง</th><th class="p-4">คนทำรายการ</th><th class="p-4">สถานที่</th><th class="p-4">หมายเหตุ</th></tr></thead>
                                 <tbody>${trRows}</tbody>
                             </table>
                         </div>
@@ -646,23 +763,34 @@
             },
 
             settings: () => `
-                <div class="max-w-2xl mx-auto space-y-6">
-                    <form onsubmit="app.saveSettings(event)" class="bg-panel border p-8 rounded-2xl space-y-4">
-                        <div>
-                            <label class="block font-bold text-primary mb-2">URL ฐานข้อมูล (Google Apps Script)</label>
-                            <input type="url" id="setting-url" value="${state.gasUrl}" placeholder="https://script.google.com/macros/s/.../exec" class="w-full p-3 rounded-xl input-field border outline-none focus:border-indigo-500">
-                            <p class="text-xs text-secondary mt-2">ใส่ URL ที่ได้จากการ Deploy Google Apps Script เพื่อให้ระบบซิงค์ข้อมูลจริง</p>
+                <div class="max-w-3xl mx-auto space-y-6">
+                    <form onsubmit="app.saveDatabaseSettings(event)" class="bg-panel border p-6 md:p-8 rounded-[2rem] space-y-4 shadow-xl">
+                        <h3 class="text-xl font-black text-primary flex items-center"><i data-lucide="cloud-lightning" class="w-5 h-5 mr-2 text-indigo-500"></i> การเชื่อมต่อคลาวด์ฐานข้อมูล</h3>
+                        <div class="pt-2">
+                            <label class="block font-bold text-sm text-secondary mb-2">URL ของ Google Apps Script</label>
+                            <input type="url" id="setting-url" value="${state.gasUrl}" placeholder="https://script.google.com/macros/s/.../exec" class="w-full p-4 rounded-xl input-field border outline-none focus:border-indigo-500 font-medium text-sm">
+                            <p class="text-xs text-slate-500 mt-2">วาง URL เว็บแอปที่แชร์แบบ "Anyone" เพื่อให้ระบบเขียน/อ่าน ข้อมูลแบบเรียลไทม์เข้าชีท</p>
                         </div>
-                        <button type="submit" class="bg-indigo-600 text-white font-bold px-6 py-3 rounded-xl w-full md:w-auto">บันทึกการตั้งค่า</button>
+                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm px-6 py-3.5 rounded-xl">บันทึกการตั้งค่าซิงค์</button>
                     </form>
+
+                    <div class="bg-panel border p-6 md:p-8 rounded-[2rem] space-y-5 shadow-xl">
+                        <h3 class="text-xl font-black text-primary flex items-center"><i data-lucide="database" class="w-5 h-5 mr-2 text-emerald-500"></i> ระบบสำรองข้อมูลภายในเครื่อง (Local Utility)</h3>
+                        <p class="text-xs text-secondary leading-relaxed">ใช้สำหรับดาวน์โหลดข้อมูลสำรองทั้งหมดเก็บไว้บนคอมพิวเตอร์ของคุณในรูปแบบไฟล์ JSON หรือนำกลับมาคืนสภาพระบบ</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                            <button onclick="exportBackupJSON()" class="p-4 bg-white/5 border border-slate-500/20 rounded-xl font-bold text-sm text-primary flex items-center justify-center hover-item"><i data-lucide="download" class="w-4 h-4 mr-2 text-blue-400"></i> ดาวน์โหลดไฟล์สำรอง (.json)</button>
+                            <div class="relative">
+                                <input type="file" id="import-file" accept=".json" onchange="importBackupJSON(event)" class="hidden">
+                                <label htmlFor="import-file" onclick="document.getElementById('import-file').click()" class="p-4 bg-white/5 border border-slate-500/20 border-dashed rounded-xl font-bold text-sm text-primary flex items-center justify-center hover-item cursor-pointer"><i data-lucide="upload" class="w-4 h-4 mr-2 text-purple-400"></i> กู้คืนระบบจากไฟล์ (.json)</label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            `,
-            
-            data: () => `<div class="text-center p-20 text-secondary bg-panel rounded-2xl border"><i data-lucide="database" class="w-16 h-16 mx-auto mb-4 opacity-30"></i><p class="text-xl font-bold text-primary">ระบบ Data Management</p><p>ใช้งานในส่วนหน้า Reports เพื่อ Export ข้อมูลได้เลย</p></div>`
+            `
         };
 
         // ==========================================
-        // 5. START APP
+        // 6. INITIAL RUN
         // ==========================================
         document.addEventListener('DOMContentLoaded', () => app.init());
 
