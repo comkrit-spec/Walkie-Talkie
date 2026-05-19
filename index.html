@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CommsControl - ระบบจัดการวิทยุสื่อสาร</title>
+    <title id="doc-title">CommsControl - ระบบจัดการวิทยุสื่อสาร</title>
     
     <meta name="theme-color" content="#060913">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -64,15 +64,8 @@
             toast: function(message, type = 'info') {
                 const container = document.getElementById('toast-root');
                 const toast = document.createElement('div');
-                const colors = {
-                    success: 'bg-emerald-500 text-white',
-                    error: 'bg-rose-500 text-white',
-                    sync: 'bg-indigo-600 text-white',
-                    info: 'bg-slate-800 text-white'
-                };
-                const icons = {
-                    success: 'check-circle', error: 'alert-circle', sync: 'refresh-cw', info: 'info'
-                };
+                const colors = { success: 'bg-emerald-500 text-white', error: 'bg-rose-500 text-white', sync: 'bg-indigo-600 text-white', info: 'bg-slate-800 text-white' };
+                const icons = { success: 'check-circle', error: 'alert-circle', sync: 'refresh-cw', info: 'info' };
                 
                 toast.className = `flex items-center gap-3 px-5 py-4 rounded-2xl shadow-2xl toast-slide font-bold text-sm pointer-events-auto ${colors[type]}`;
                 toast.innerHTML = `<i data-lucide="${icons[type]}" class="w-5 h-5 ${type==='sync'?'animate-spin':''}"></i> <span>${message}</span>`;
@@ -90,22 +83,14 @@
             modal: function(options) {
                 const { title, text, type = 'alert', confirmText = 'ตกลง', cancelText = 'ยกเลิก', onConfirm } = options;
                 const root = document.getElementById('modal-root');
-                
-                const iconHtml = type === 'prompt' ? '<i data-lucide="help-circle" class="w-8 h-8 text-indigo-400"></i>' 
-                               : type === 'confirm' ? '<i data-lucide="alert-triangle" class="w-8 h-8 text-amber-400"></i>' 
-                               : '<i data-lucide="info" class="w-8 h-8 text-blue-400"></i>';
-
+                const iconHtml = type === 'prompt' ? '<i data-lucide="help-circle" class="w-8 h-8 text-indigo-400"></i>' : type === 'confirm' ? '<i data-lucide="alert-triangle" class="w-8 h-8 text-amber-400"></i>' : '<i data-lucide="info" class="w-8 h-8 text-blue-400"></i>';
                 const inputHtml = type === 'prompt' ? `<input type="text" id="modal-input" class="w-full mt-4 p-4 rounded-xl input-field border outline-none focus:border-indigo-500 font-bold" placeholder="พิมพ์ข้อความที่นี่..." autocomplete="off">` : '';
-                
                 const cancelBtn = (type === 'confirm' || type === 'prompt') ? `<button id="modal-cancel" class="flex-1 py-4 rounded-xl font-bold bg-white/5 hover:bg-white/10 text-slate-300 transition"> ${cancelText} </button>` : '';
 
                 root.innerHTML = `
                     <div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-opacity">
                         <div class="bg-[#0f1524] border border-white/10 rounded-[2rem] p-8 max-w-sm w-full shadow-2xl zoom-in">
-                            <div class="flex items-center gap-4 mb-4">
-                                <div class="p-3 bg-white/5 rounded-2xl">${iconHtml}</div>
-                                <h3 class="text-2xl font-black text-white">${title}</h3>
-                            </div>
+                            <div class="flex items-center gap-4 mb-4"><div class="p-3 bg-white/5 rounded-2xl">${iconHtml}</div><h3 class="text-2xl font-black text-white">${title}</h3></div>
                             <p class="text-slate-400 text-sm font-medium leading-relaxed">${text}</p>
                             ${inputHtml}
                             <div class="flex gap-3 mt-8">
@@ -116,21 +101,16 @@
                     </div>
                 `;
                 lucide.createIcons({ root: root });
-
                 if(type === 'prompt') document.getElementById('modal-input').focus();
-
+                
                 const closeModal = () => root.innerHTML = '';
-
                 document.getElementById('modal-confirm').onclick = () => {
                     const val = type === 'prompt' ? document.getElementById('modal-input').value.trim() : true;
-                    if (type === 'prompt' && !val) return; // Prevent empty submit
+                    if (type === 'prompt' && !val) return; 
                     closeModal();
                     if (onConfirm) onConfirm(val);
                 };
-
-                if (document.getElementById('modal-cancel')) {
-                    document.getElementById('modal-cancel').onclick = closeModal;
-                }
+                if (document.getElementById('modal-cancel')) document.getElementById('modal-cancel').onclick = closeModal;
             }
         };
 
@@ -144,6 +124,14 @@
             isMobileMenuOpen: false,
             theme: localStorage.getItem('comms_theme') || 'dark',
             gasUrl: localStorage.getItem('comms_gas_url') || '',
+            
+            // SYSTEM CONFIGURATION (Logo, App Name, Idle Timer)
+            sysConfig: JSON.parse(localStorage.getItem('comms_sysconfig')) || {
+                appName: 'CommsControl',
+                shortName: 'Comms.',
+                logoUrl: '',
+                idleMinutes: 10
+            },
             
             devices: [], employees: [], transactions: [], users: [],
             transForm: { type: 'borrow', selectedDevices: [] },
@@ -178,6 +166,7 @@
         // ==========================================
         const app = {
             init: function() {
+                this.updateDocumentTitle();
                 this.applyTheme();
                 if (state.isLoggedIn) {
                     this.renderMainLayout();
@@ -185,16 +174,24 @@
                     this.fetchData();
                     this.startAutoRefresh();
                 } else {
-                    this.fetchDataForLogin();
+                    this.renderLoginScreen();
+                    this.fetchDataForLogin(); // ดึงข้อมูลพื้นหลัง ไม่บล็อก UI
                 }
             },
 
-            fetchDataForLogin: async function() {
-                if (!state.gasUrl) {
-                    state.users = fallbackData.users;
-                    this.renderLoginScreen();
-                    return;
+            updateDocumentTitle: function() {
+                document.getElementById('doc-title').innerText = `${state.sysConfig.appName} - ระบบจัดการวิทยุสื่อสาร`;
+            },
+
+            getLogoHTML: function(sizeClass = "w-6 h-6") {
+                if (state.sysConfig.logoUrl) {
+                    return `<img src="${state.sysConfig.logoUrl}" class="${sizeClass} object-cover rounded-md" alt="Logo" onerror="this.src=''; this.onerror=null; this.alt='';">`;
                 }
+                return `<i data-lucide="radio" class="${sizeClass}"></i>`;
+            },
+
+            fetchDataForLogin: async function() {
+                if (!state.gasUrl) { state.users = fallbackData.users; return; }
                 try {
                     const res = await fetch(state.gasUrl);
                     const data = await res.json();
@@ -202,7 +199,6 @@
                 } catch (e) {
                     state.users = fallbackData.users;
                 }
-                this.renderLoginScreen();
             },
 
             handleLogin: function(e) {
@@ -226,23 +222,29 @@
                 }
             },
 
+            // แก้ปัญหา Logout ช้า: Render หน้า Login ทันที
             handleLogout: function(reason) {
                 state.isLoggedIn = false;
                 state.user = null;
                 sessionStorage.clear();
                 clearInterval(state.autoRefreshInterval);
                 this.stopSessionTracking();
-                this.fetchDataForLogin(); 
+                
+                this.renderLoginScreen(); // เรนเดอร์หน้า Login ทันทีแบบไร้รอยต่อ
+                
                 if (reason === 'idle') {
-                    setTimeout(() => ui.modal({ title: 'หมดเวลาเชื่อมต่อ', text: 'ระบบได้ล็อกเอาต์อัตโนมัติเนื่องจากไม่มีการใช้งานเกิน 10 นาที เพื่อความปลอดภัย' }), 500);
+                    setTimeout(() => ui.modal({ title: 'หมดเวลาเชื่อมต่อ', text: `ระบบได้ล็อกเอาต์อัตโนมัติเนื่องจากไม่มีการใช้งานเกิน ${state.sysConfig.idleMinutes} นาที เพื่อความปลอดภัย` }), 200);
                 }
+
+                this.fetchDataForLogin(); // โหลดข้อมูล Users เงียบๆ ในพื้นหลัง
             },
 
             startSessionTracking: function() {
                 this.stopSessionTracking();
+                const timeoutMs = (state.sysConfig.idleMinutes || 10) * 60 * 1000;
                 const resetTimer = () => {
                     clearTimeout(state.idleTimer);
-                    if (state.isLoggedIn) state.idleTimer = setTimeout(() => this.handleLogout('idle'), 600000);
+                    if (state.isLoggedIn) state.idleTimer = setTimeout(() => this.handleLogout('idle'), timeoutMs);
                 };
                 window._idleListeners = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'].forEach(evt => window.addEventListener(evt, resetTimer));
                 resetTimer();
@@ -253,7 +255,7 @@
                 clearInterval(state.autoRefreshInterval);
                 state.autoRefreshInterval = setInterval(() => {
                     if (state.isLoggedIn && state.gasUrl) this.fetchData(true);
-                }, 30000); // ทุก 30 วินาที
+                }, 30000); 
             },
 
             fetchData: async function(isBackground = false) {
@@ -286,7 +288,6 @@
             },
 
             syncData: async function(payload, successMsg) {
-                // UI อัปเดตทันที (Optimistic Update)
                 this.renderCurrentView(); 
                 
                 if (!state.gasUrl) {
@@ -357,7 +358,7 @@
                     'devices': { title: 'Device Inventory', sub: 'ตรวจสอบสถานะและจัดการคลังวิทยุสื่อสาร' },
                     'employees': { title: 'Employee Directory', sub: 'รายชื่อบุคลากรที่มีสิทธิ์เบิกใช้งาน' },
                     'reports': { title: 'Analytics & Reports', sub: 'ประวัติการทำรายการและส่งออกข้อมูล' },
-                    'settings': { title: 'System Settings', sub: 'ศูนย์ควบคุม ตั้งค่าระบบ ฐานข้อมูล และจัดการผู้ใช้งาน' }
+                    'settings': { title: 'System Settings', sub: 'ศูนย์ควบคุม ตั้งค่าระบบ แสดงผล และผู้ใช้งาน' }
                 };
                 
                 if(titles[viewId]) {
@@ -492,7 +493,6 @@
                 return d;
             });
 
-            // Optimistic sync
             app.syncData({ action: 'transaction', newTransactions: newTrans, updatedDevices }, `บันทึกรายการ${type==='borrow'?'เบิก':'คืน'} ${devs.length} เครื่อง เรียบร้อย`);
             state.transForm = { type: 'borrow', selectedDevices: [] };
             
@@ -570,7 +570,7 @@
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = `CommsControl_Report_${Date.now()}.csv`; a.click();
+            a.href = url; a.download = `${state.sysConfig.shortName}_Report_${Date.now()}.csv`; a.click();
             ui.toast('ดาวน์โหลดรายงาน CSV สำเร็จ', 'success');
         }
 
@@ -579,7 +579,7 @@
             const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = `CommsControl_Backup_${new Date().toISOString().slice(0,10)}.json`; a.click();
+            a.href = url; a.download = `${state.sysConfig.shortName}_Backup_${new Date().toISOString().slice(0,10)}.json`; a.click();
             ui.toast('ดาวน์โหลดไฟล์แบ็คอัปสำเร็จ', 'success');
         }
 
@@ -618,6 +618,22 @@
             localStorage.setItem('comms_gas_url', url);
             ui.toast('บันทึกการตั้งค่าแล้ว กำลังเชื่อมต่อ...', 'sync');
             app.fetchData();
+        }
+
+        function saveAppConfig(e) {
+            e.preventDefault();
+            const appName = document.getElementById('cfg-appname').value.trim() || 'CommsControl';
+            const shortName = document.getElementById('cfg-shortname').value.trim() || 'Comms.';
+            const logoUrl = document.getElementById('cfg-logo').value.trim();
+            const idleMinutes = parseInt(document.getElementById('cfg-idle').value) || 10;
+            
+            state.sysConfig = { appName, shortName, logoUrl, idleMinutes };
+            localStorage.setItem('comms_sysconfig', JSON.stringify(state.sysConfig));
+            
+            app.updateDocumentTitle();
+            app.startSessionTracking(); 
+            app.renderMainLayout(); // Re-render to reflect new names/logo globally
+            ui.toast('บันทึกการตั้งค่าระบบเรียบร้อย', 'success');
         }
 
         function submitSystemUser(e) {
@@ -675,8 +691,10 @@
                     <div class="w-full max-w-md bg-panel border rounded-[2.5rem] p-8 md:p-10 shadow-2xl relative overflow-hidden fade-in">
                         <div class="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-indigo-500/10 blur-xl"></div>
                         <div class="flex flex-col items-center mb-8 relative z-10">
-                            <div class="p-4 bg-gradient-to-tr from-indigo-500 via-purple-500 to-indigo-500 rounded-2xl shadow-xl text-white mb-4"><i data-lucide="radio" class="w-8 h-8"></i></div>
-                            <h2 class="text-3xl font-black tracking-tight text-primary">CommsControl</h2>
+                            <div class="p-4 bg-gradient-to-tr from-indigo-500 via-purple-500 to-indigo-500 rounded-2xl shadow-xl text-white mb-4 w-16 h-16 flex items-center justify-center overflow-hidden">
+                                ${app.getLogoHTML('w-8 h-8')}
+                            </div>
+                            <h2 class="text-3xl font-black tracking-tight text-primary">${state.sysConfig.appName}</h2>
                             <p class="text-sm font-medium text-secondary mt-1">ลงชื่อเข้าใช้งานระบบเพื่อควบคุมอุปกรณ์</p>
                         </div>
                         <form onsubmit="app.handleLogin(event)" class="space-y-5 relative z-10">
@@ -690,15 +708,19 @@
 
             mainStructure: () => `
                 <div class="h-screen w-full flex flex-col md:flex-row relative z-10">
+                    
                     <div class="md:hidden px-5 py-4 flex justify-between items-center bg-panel border-b z-40 flex-shrink-0">
-                        <div class="flex items-center space-x-3"><div class="p-2 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-lg text-white"><i data-lucide="radio" class="w-5 h-5"></i></div><span class="font-black text-xl text-primary">Comms.</span></div>
+                        <div class="flex items-center space-x-3">
+                            <div class="p-2 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-lg text-white w-9 h-9 flex items-center justify-center overflow-hidden">${app.getLogoHTML('w-5 h-5')}</div>
+                            <span class="font-black text-xl text-primary">${state.sysConfig.shortName}</span>
+                        </div>
                         <button onclick="app.toggleMobileMenu()" class="p-2 rounded-lg text-secondary"><i data-lucide="menu"></i></button>
                     </div>
 
                     <aside id="sidebar" class="fixed md:relative top-0 left-0 z-50 md:z-30 h-screen md:h-auto w-64 flex-shrink-0 flex flex-col transform -translate-x-full md:translate-x-0 transition-all duration-300 shadow-2xl md:shadow-none bg-panel border-r border-slate-500/10 backdrop-blur-3xl">
                         <div class="p-6 hidden md:flex items-center space-x-3">
-                            <div class="p-2.5 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl text-white shadow-lg shadow-indigo-500/20"><i data-lucide="radio" class="w-6 h-6"></i></div>
-                            <span class="font-black text-2xl text-primary tracking-tight">Comms.</span>
+                            <div class="p-2.5 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl text-white shadow-lg shadow-indigo-500/20 w-11 h-11 flex items-center justify-center overflow-hidden">${app.getLogoHTML('w-6 h-6')}</div>
+                            <span class="font-black text-2xl text-primary tracking-tight">${state.sysConfig.shortName}</span>
                         </div>
                         <nav class="px-4 py-4 space-y-1.5 flex-1 overflow-y-auto hide-scroll" id="nav-container"></nav>
                         <div class="p-4 border-t border-slate-500/10 space-y-1" id="nav-footer"></div>
@@ -717,6 +739,7 @@
                                 <div class="px-4 py-3 rounded-xl bg-panel border border-slate-500/20 flex items-center space-x-2"><div class="w-2 h-2 rounded-full" id="status-dot"></div><span class="text-xs font-bold text-secondary" id="status-text"></span></div>
                             </div>
                         </header>
+                        
                         <div id="view-container"></div>
                     </main>
                 </div>
@@ -763,16 +786,8 @@
                                 </div>
                                 <div class="flex-shrink-0 flex items-center justify-center p-6 bg-black/20 rounded-[2rem] border border-white/5 backdrop-blur-md shadow-inner">
                                     <div class="relative w-32 h-32 flex items-center justify-center">
-                                        <svg class="w-full h-full transform -rotate-90">
-                                            <circle cx="64" cy="64" r="56" stroke="currentColor" stroke-width="12" fill="transparent" class="text-slate-700/30" />
-                                            <circle id="health-circle" cx="64" cy="64" r="56" stroke="currentColor" stroke-width="12" fill="transparent" 
-                                                stroke-dasharray="${dashArray}" stroke-dashoffset="${dashArray}" data-offset="${dashOffset}"
-                                                class="text-indigo-500 progress-ring" stroke-linecap="round" />
-                                        </svg>
-                                        <div class="absolute flex flex-col items-center justify-center text-center">
-                                            <span class="text-3xl font-black text-white">${healthPct}%</span>
-                                            <span class="text-[9px] uppercase tracking-widest text-slate-400 font-bold mt-1">Ready</span>
-                                        </div>
+                                        <svg class="w-full h-full transform -rotate-90"><circle cx="64" cy="64" r="56" stroke="currentColor" stroke-width="12" fill="transparent" class="text-slate-700/30" /><circle id="health-circle" cx="64" cy="64" r="56" stroke="currentColor" stroke-width="12" fill="transparent" stroke-dasharray="${dashArray}" stroke-dashoffset="${dashArray}" data-offset="${dashOffset}" class="text-indigo-500 progress-ring" stroke-linecap="round" /></svg>
+                                        <div class="absolute flex flex-col items-center justify-center text-center"><span class="text-3xl font-black text-white">${healthPct}%</span><span class="text-[9px] uppercase tracking-widest text-slate-400 font-bold mt-1">Ready</span></div>
                                     </div>
                                 </div>
                             </div>
@@ -844,7 +859,6 @@
                 const uniqueLocs = [...new Set(state.transactions.map(tr => tr.location).filter(l => l && l !== '-'))];
                 const locOptions = uniqueLocs.map(l => `<option value="${l}">`).join('');
 
-                // ปรับแต่งปุ่มให้ดูใหญ่อลังการและโดดเด่น
                 const submitBtnClass = t.selectedDevices.length > 0 
                     ? (t.type==='borrow'?'bg-gradient-to-r from-indigo-600 to-purple-600 shadow-[0_0_25px_rgba(99,102,241,0.4)]':'bg-gradient-to-r from-emerald-500 to-teal-500 shadow-[0_0_25px_rgba(16,185,129,0.4)]')
                     : 'bg-slate-700/50 cursor-not-allowed text-slate-400';
@@ -857,7 +871,6 @@
                         </div>
 
                         <form onsubmit="handleTransaction(event)" class="bg-panel border p-6 md:p-10 rounded-[2.5rem] shadow-2xl space-y-8">
-                            
                             <div>
                                 <div class="flex justify-between items-center border-b border-slate-500/20 pb-4 mb-4">
                                     <label class="font-black text-primary text-xl">1. เลือกวิทยุสื่อสาร</label>
@@ -939,10 +952,7 @@
                 const list = state.employees.map(e => `
                     <tr class="border-b border-slate-500/10 hover-item text-sm">
                         <td class="p-5 font-black text-primary tracking-wide pl-8">${e.id}</td>
-                        <td class="p-5 font-bold text-primary flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 font-bold flex items-center justify-center text-xs">${e.name.charAt(0)}</div>
-                            ${e.name}
-                        </td>
+                        <td class="p-5 font-bold text-primary flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 font-bold flex items-center justify-center text-xs">${e.name.charAt(0)}</div>${e.name}</td>
                         <td class="p-5"><span class="px-3 py-1.5 bg-slate-500/10 border border-slate-500/20 text-secondary rounded-lg text-xs font-semibold">${e.department}</span></td>
                         <td class="p-5 text-secondary font-medium tracking-wide pr-8">${e.phone || '-'}</td>
                     </tr>
@@ -957,12 +967,7 @@
                             <div><label class="text-xs font-bold text-secondary mb-1 block">เบอร์ติดต่อ</label><input type="text" id="emp-phone" placeholder="08x-xxx-xxxx" class="w-full p-3.5 rounded-xl input-field border text-sm font-bold"></div>
                             <button type="submit" class="sm:col-span-5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm p-4 rounded-xl shadow-lg shadow-indigo-600/20 transition mt-2">ลงทะเบียนบุคลากรใหม่</button>
                         </form>
-                        <div class="bg-panel border rounded-[2rem] overflow-x-auto shadow-xl">
-                            <table class="w-full text-left min-w-[600px]">
-                                <thead class="text-xs text-secondary table-header uppercase tracking-wider"><tr><th class="p-5 pl-8">รหัส</th><th class="p-5">ชื่อ-สกุล</th><th class="p-5">แผนก</th><th class="p-5 pr-8">เบอร์โทรศัพท์</th></tr></thead>
-                                <tbody>${list}</tbody>
-                            </table>
-                        </div>
+                        <div class="bg-panel border rounded-[2rem] overflow-x-auto shadow-xl"><table class="w-full text-left min-w-[600px]"><thead class="text-xs text-secondary table-header uppercase tracking-wider"><tr><th class="p-5 pl-8">รหัส</th><th class="p-5">ชื่อ-สกุล</th><th class="p-5">แผนก</th><th class="p-5 pr-8">เบอร์โทรศัพท์</th></tr></thead><tbody>${list}</tbody></table></div>
                     </div>
                 `;
             },
@@ -991,12 +996,7 @@
                             <div class="w-full sm:w-auto"><label class="text-xs font-bold text-secondary block mb-2">ถึงวันที่</label><input type="date" id="rep-end" class="p-3.5 rounded-xl input-field border text-sm font-bold"></div>
                             <button onclick="executeExportCSV()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm px-8 py-3.5 rounded-xl flex items-center shadow-lg shadow-emerald-600/20 transition h-[50px]"><i data-lucide="download" class="w-5 h-5 mr-2"></i> ส่งออกตารางรายงาน (CSV)</button>
                         </div>
-                        <div class="bg-panel border rounded-[2rem] overflow-x-auto max-h-[60vh] relative shadow-xl">
-                            <table class="w-full text-left min-w-[800px]">
-                                <thead class="sticky top-0 bg-slate-900/95 backdrop-blur-xl border-b border-slate-500/20 text-secondary text-xs uppercase tracking-wider"><tr class="table-header"><th class="p-5 pl-8">วัน-เวลา</th><th class="p-5">รายการ</th><th class="p-5">เครื่อง</th><th class="p-5">ผู้ปฏิบัติงาน</th><th class="p-5">สถานที่</th><th class="p-5 pr-8">หมายเหตุ</th></tr></thead>
-                                <tbody>${trRows}</tbody>
-                            </table>
-                        </div>
+                        <div class="bg-panel border rounded-[2rem] overflow-x-auto max-h-[60vh] relative shadow-xl"><table class="w-full text-left min-w-[800px]"><thead class="sticky top-0 bg-slate-900/95 backdrop-blur-xl border-b border-slate-500/20 text-secondary text-xs uppercase tracking-wider"><tr class="table-header"><th class="p-5 pl-8">วัน-เวลา</th><th class="p-5">รายการ</th><th class="p-5">เครื่อง</th><th class="p-5">ผู้ปฏิบัติงาน</th><th class="p-5">สถานที่</th><th class="p-5 pr-8">หมายเหตุ</th></tr></thead><tbody>${trRows}</tbody></table></div>
                     </div>
                 `;
             },
@@ -1021,42 +1021,49 @@
                 return `
                 <div class="max-w-4xl mx-auto space-y-8">
                     
+                    <form onsubmit="saveAppConfig(event)" class="bg-panel border p-8 md:p-10 rounded-[2.5rem] shadow-2xl space-y-6">
+                        <h3 class="text-2xl font-black text-primary flex items-center mb-2"><div class="p-2.5 bg-blue-500/20 rounded-xl mr-4"><i data-lucide="layout" class="w-6 h-6 text-blue-400"></i></div> การแสดงผลและระบบ</h3>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
+                            <div>
+                                <label class="block font-bold text-sm text-secondary mb-3">ชื่อระบบ (App Name)</label>
+                                <input type="text" id="cfg-appname" value="${state.sysConfig.appName}" class="w-full p-4 rounded-2xl input-field border outline-none focus:border-indigo-500 font-bold text-sm shadow-inner">
+                            </div>
+                            <div>
+                                <label class="block font-bold text-sm text-secondary mb-3">ชื่อย่อ (Short Name)</label>
+                                <input type="text" id="cfg-shortname" value="${state.sysConfig.shortName}" class="w-full p-4 rounded-2xl input-field border outline-none focus:border-indigo-500 font-bold text-sm shadow-inner">
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block font-bold text-sm text-secondary mb-3">URL โลโก้ภาพ (เว้นว่างไว้เพื่อใช้ไอคอนระบบ)</label>
+                                <input type="url" id="cfg-logo" value="${state.sysConfig.logoUrl}" placeholder="https://..." class="w-full p-4 rounded-2xl input-field border outline-none focus:border-indigo-500 font-bold text-sm shadow-inner">
+                            </div>
+                            <div>
+                                <label class="block font-bold text-sm text-secondary mb-3">เวลา Logout อัตโนมัติ (หน่วย: นาที)</label>
+                                <input type="number" id="cfg-idle" min="1" max="1440" value="${state.sysConfig.idleMinutes}" class="w-full p-4 rounded-2xl input-field border outline-none focus:border-indigo-500 font-bold text-sm shadow-inner">
+                            </div>
+                        </div>
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white font-black text-base px-8 py-4 rounded-xl transition shadow-lg shadow-blue-600/20">บันทึกการแสดงผล</button>
+                    </form>
+
                     <div class="bg-panel border p-8 md:p-10 rounded-[2.5rem] shadow-2xl">
                         <h3 class="text-2xl font-black text-primary flex items-center mb-8"><div class="p-2.5 bg-purple-500/20 rounded-xl mr-4"><i data-lucide="users" class="w-6 h-6 text-purple-400"></i></div> การจัดการผู้ใช้งาน</h3>
-
                         ${state.user.role === 'ผู้ดูแลระบบ' ? `
                         <form onsubmit="submitSystemUser(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-5 mb-8 bg-black/20 p-6 rounded-[2rem] border border-white/5 shadow-inner">
                             <div><label class="block text-xs font-bold text-secondary mb-2 uppercase tracking-wider">Username</label><input type="text" id="sys-username" required class="w-full p-3.5 rounded-xl input-field border text-sm font-bold"></div>
                             <div><label class="block text-xs font-bold text-secondary mb-2 uppercase tracking-wider">Password</label><input type="text" id="sys-password" required class="w-full p-3.5 rounded-xl input-field border text-sm font-bold"></div>
-                            <div>
-                                <label class="block text-xs font-bold text-secondary mb-2 uppercase tracking-wider">สิทธิ์ (Role)</label>
-                                <select id="sys-role" class="w-full p-3.5 rounded-xl input-field border text-sm font-bold outline-none cursor-pointer">
-                                    <option value="เจ้าหน้าที่" class="bg-slate-900 text-white">เจ้าหน้าที่</option>
-                                    <option value="ผู้ดูแลระบบ" class="bg-slate-900 text-white">ผู้ดูแลระบบ</option>
-                                </select>
-                            </div>
-                            <div class="flex items-end">
-                                <button type="submit" class="w-full p-3.5 rounded-xl font-black text-white text-sm transition-all shadow-lg hover:-translate-y-0.5 active:scale-95 ${isEdit ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/20' : 'bg-purple-600 hover:bg-purple-500 shadow-purple-600/20'}">
-                                    ${isEdit ? 'บันทึกแก้ไข' : 'เพิ่มบัญชี'}
-                                </button>
-                            </div>
+                            <div><label class="block text-xs font-bold text-secondary mb-2 uppercase tracking-wider">สิทธิ์ (Role)</label><select id="sys-role" class="w-full p-3.5 rounded-xl input-field border text-sm font-bold outline-none cursor-pointer"><option value="เจ้าหน้าที่" class="bg-slate-900 text-white">เจ้าหน้าที่</option><option value="ผู้ดูแลระบบ" class="bg-slate-900 text-white">ผู้ดูแลระบบ</option></select></div>
+                            <div class="flex items-end"><button type="submit" class="w-full p-3.5 rounded-xl font-black text-white text-sm transition-all shadow-lg hover:-translate-y-0.5 active:scale-95 ${isEdit ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/20' : 'bg-purple-600 hover:bg-purple-500 shadow-purple-600/20'}">${isEdit ? 'บันทึกแก้ไข' : 'เพิ่มบัญชี'}</button></div>
                         </form>
                         ` : `<div class="mb-8 p-5 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-400 text-sm font-bold flex items-center"><i data-lucide="shield-alert" class="w-5 h-5 mr-3"></i> คุณสามารถดูรายชื่อได้ แต่ต้องเป็น 'ผู้ดูแลระบบ' เท่านั้นถึงจะเพิ่ม/แก้ไขได้</div>`}
-
-                        <div class="overflow-x-auto rounded-[2rem] border border-slate-500/10 shadow-inner bg-black/10">
-                            <table class="w-full text-left min-w-[600px]">
-                                <thead class="text-xs text-secondary table-header uppercase tracking-wider"><tr><th class="p-5 pl-8">Username</th><th class="p-5">Password</th><th class="p-5">Role</th><th class="p-5 pr-8 text-right">Action</th></tr></thead>
-                                <tbody>${userRows}</tbody>
-                            </table>
-                        </div>
+                        <div class="overflow-x-auto rounded-[2rem] border border-slate-500/10 shadow-inner bg-black/10"><table class="w-full text-left min-w-[600px]"><thead class="text-xs text-secondary table-header uppercase tracking-wider"><tr><th class="p-5 pl-8">Username</th><th class="p-5">Password</th><th class="p-5">Role</th><th class="p-5 pr-8 text-right">Action</th></tr></thead><tbody>${userRows}</tbody></table></div>
                     </div>
 
                     <form onsubmit="saveDatabaseSettings(event)" class="bg-panel border p-8 md:p-10 rounded-[2.5rem] space-y-6 shadow-2xl">
                         <h3 class="text-2xl font-black text-primary flex items-center"><div class="p-2.5 bg-indigo-500/20 rounded-xl mr-4"><i data-lucide="cloud-lightning" class="w-6 h-6 text-indigo-400"></i></div> การเชื่อมต่อฐานข้อมูล</h3>
-                        <div class="pt-2">
-                            <label class="block font-bold text-sm text-secondary mb-3">URL ของ Google Apps Script</label>
-                            <input type="url" id="setting-url" value="${state.gasUrl}" placeholder="https://script.google.com/macros/s/.../exec" class="w-full p-5 rounded-2xl input-field border outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20 font-bold text-base transition-all shadow-inner">
-                        </div>
+                        <div class="pt-2"><label class="block font-bold text-sm text-secondary mb-3">URL ของ Google Apps Script</label><input type="url" id="setting-url" value="${state.gasUrl}" placeholder="https://script.google.com/macros/s/.../exec" class="w-full p-5 rounded-2xl input-field border outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20 font-bold text-base transition-all shadow-inner"></div>
                         <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-base px-8 py-4 rounded-xl transition shadow-lg shadow-indigo-600/20">บันทึกการเชื่อมต่อ</button>
                     </form>
 
@@ -1064,10 +1071,7 @@
                         <h3 class="text-2xl font-black text-primary flex items-center mb-6"><div class="p-2.5 bg-emerald-500/20 rounded-xl mr-4"><i data-lucide="download-cloud" class="w-6 h-6 text-emerald-400"></i></div> นำเข้า / ส่งออก ข้อมูล</h3>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                             <button onclick="exportBackupJSON()" class="p-5 bg-white/5 border border-white/10 rounded-2xl font-bold text-sm text-primary flex items-center justify-center hover-item transition hover:-translate-y-1"><i data-lucide="download" class="w-5 h-5 mr-3 text-blue-400"></i> ดาวน์โหลด Backup (.json)</button>
-                            <div class="relative">
-                                <input type="file" id="import-file" accept=".json" onchange="importBackupJSON(event)" class="hidden">
-                                <label htmlFor="import-file" onclick="document.getElementById('import-file').click()" class="p-5 bg-white/5 border border-white/10 border-dashed rounded-2xl font-bold text-sm text-primary flex items-center justify-center hover-item cursor-pointer transition hover:-translate-y-1"><i data-lucide="upload" class="w-5 h-5 mr-3 text-purple-400"></i> กู้คืนระบบ Restore (.json)</label>
-                            </div>
+                            <div class="relative"><input type="file" id="import-file" accept=".json" onchange="importBackupJSON(event)" class="hidden"><label htmlFor="import-file" onclick="document.getElementById('import-file').click()" class="p-5 bg-white/5 border border-white/10 border-dashed rounded-2xl font-bold text-sm text-primary flex items-center justify-center hover-item cursor-pointer transition hover:-translate-y-1"><i data-lucide="upload" class="w-5 h-5 mr-3 text-purple-400"></i> กู้คืนระบบ Restore (.json)</label></div>
                         </div>
                     </div>
                 </div>
