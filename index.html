@@ -8,8 +8,6 @@
     <meta name="theme-color" content="#060913">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="icon-192.png">
-    <link rel="manifest" href="manifest.json">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -49,21 +47,12 @@
     </style>
 </head>
 <body class="font-sans transition-colors duration-500 overflow-hidden" id="body-tag">
-    
     <div class="fixed top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-600/15 blur-[140px] pointer-events-none z-0"></div>
     <div class="fixed bottom-[-10%] right-[-5%] w-[40%] h-[50%] rounded-full bg-purple-600/15 blur-[140px] pointer-events-none z-0"></div>
 
     <div id="app-root" class="h-screen w-full relative z-10 flex overflow-hidden"></div>
     <div id="modal-root" class="relative z-50"></div>
     <div id="toast-root" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none"></div>
-
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(()=> console.log('Service Worker disabled.'));
-            });
-        }
-    </script>
 
     <script src="app.js"></script>
 </body>
