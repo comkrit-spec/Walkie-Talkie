@@ -8,6 +8,8 @@
     <meta name="theme-color" content="#060913">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="manifest" href="manifest.json">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -57,8 +59,16 @@
     <div id="toast-root" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none"></div>
 
     <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js');
+            });
+        }
+    </script>
+
+    <script>
         // ==========================================
-        // 0. MODERN UI SYSTEM (Modals & Toasts)
+        // 0. MODERN UI SYSTEM
         // ==========================================
         const ui = {
             toast: function(message, type = 'info') {
@@ -125,13 +135,7 @@
             theme: localStorage.getItem('comms_theme') || 'dark',
             gasUrl: localStorage.getItem('comms_gas_url') || '',
             
-            // SYSTEM CONFIGURATION (Logo, App Name, Idle Timer)
-            sysConfig: JSON.parse(localStorage.getItem('comms_sysconfig')) || {
-                appName: 'CommsControl',
-                shortName: 'Comms.',
-                logoUrl: '',
-                idleMinutes: 10
-            },
+            sysConfig: JSON.parse(localStorage.getItem('comms_sysconfig')) || { appName: 'CommsControl', shortName: 'Comms.', logoUrl: '', idleMinutes: 10 },
             
             devices: [], employees: [], transactions: [], users: [],
             transForm: { type: 'borrow', selectedDevices: [] },
@@ -140,17 +144,8 @@
         };
 
         const fallbackData = {
-            devices: [
-                { id: 'R-001', model: 'Motorola CP200d', serial: 'S/N-9901', status: 'available', assignedTo: '' },
-                { id: 'R-002', model: 'Motorola CP200d', serial: 'S/N-9902', status: 'borrowed', assignedTo: 'EMP-001' },
-                { id: 'R-003', model: 'Icom IC-V80', serial: 'S/N-8801', status: 'maintenance', assignedTo: '' }
-            ],
-            employees: [
-                { id: 'EMP-001', name: 'สมชาย ใจกล้า', department: 'รักษาความปลอดภัย', phone: '081-111-1111' },
-                { id: 'EMP-002', name: 'วิชัย รักงาน', department: 'ช่างซ่อมบำรุง', phone: '082-222-2222' }
-            ],
-            transactions: [],
-            users: [{ username: 'admin', password: 'admin1234', role: 'ผู้ดูแลระบบ' }, { username: 'user', password: '1234', role: 'เจ้าหน้าที่' }]
+            devices: [], employees: [], transactions: [],
+            users: [{ username: 'admin', password: 'admin1234', role: 'ผู้ดูแลระบบ' }]
         };
 
         const navItems = [
@@ -175,7 +170,6 @@
                     this.startAutoRefresh();
                 } else {
                     this.renderLoginScreen();
-                    this.fetchDataForLogin(); // ดึงข้อมูลพื้นหลัง ไม่บล็อก UI
                 }
             },
 
@@ -184,59 +178,66 @@
             },
 
             getLogoHTML: function(sizeClass = "w-6 h-6") {
-                if (state.sysConfig.logoUrl) {
-                    return `<img src="${state.sysConfig.logoUrl}" class="${sizeClass} object-cover rounded-md" alt="Logo" onerror="this.src=''; this.onerror=null; this.alt='';">`;
-                }
+                if (state.sysConfig.logoUrl) return `<img src="${state.sysConfig.logoUrl}" class="${sizeClass} object-cover rounded-md" alt="Logo" onerror="this.src=''; this.onerror=null;">`;
                 return `<i data-lucide="radio" class="${sizeClass}"></i>`;
             },
 
-            fetchDataForLogin: async function() {
-                if (!state.gasUrl) { state.users = fallbackData.users; return; }
-                try {
-                    const res = await fetch(state.gasUrl);
-                    const data = await res.json();
-                    if (data.users) state.users = data.users;
-                } catch (e) {
-                    state.users = fallbackData.users;
-                }
-            },
-
-            handleLogin: function(e) {
+            // 🛡️ ระบบ Login ปรับปรุงใหม่: ยิงไปเช็กที่ Server ตรงๆ (Secure)
+            handleLogin: async function(e) {
                 e.preventDefault();
                 const user = document.getElementById('login-user').value.trim();
                 const pass = document.getElementById('login-pass').value;
-                const foundUser = state.users.find(u => u.username === user && u.password === pass);
 
-                if (foundUser) {
-                    state.isLoggedIn = true;
-                    state.user = { username: foundUser.username, role: foundUser.role };
-                    sessionStorage.setItem('comms_logged_in', 'true');
-                    sessionStorage.setItem('comms_user', JSON.stringify(state.user));
-                    this.renderMainLayout();
-                    this.startSessionTracking();
-                    this.fetchData();
-                    this.startAutoRefresh();
-                    ui.toast(`ยินดีต้อนรับคุณ ${user}`, 'success');
-                } else {
-                    ui.modal({ title: 'เข้าสู่ระบบล้มเหลว', text: 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง' });
+                if (!state.gasUrl) {
+                    // หากยังไม่ได้ใส่ URL ฐานข้อมูล จะให้ใช้ Fallback Admin
+                    const foundUser = fallbackData.users.find(u => u.username === user && u.password === pass);
+                    if (foundUser) this.processLoginSuccess(foundUser);
+                    else ui.modal({ title: 'เข้าสู่ระบบล้มเหลว', text: 'โหมด Local: ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง' });
+                    return;
+                }
+
+                ui.toast('กำลังตรวจสอบสิทธิ์การเข้าใช้งาน...', 'sync');
+                try {
+                    const res = await fetch(state.gasUrl, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'login', username: user, password: pass }),
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                    });
+                    const data = await res.json();
+                    
+                    if (data.success && data.user) {
+                        this.processLoginSuccess(data.user);
+                    } else {
+                        ui.modal({ title: 'เข้าสู่ระบบล้มเหลว', text: 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง' });
+                    }
+                } catch (err) {
+                    ui.modal({ title: 'ข้อผิดพลาดเครือข่าย', text: 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้ กรุณาตรวจสอบ URL ในหน้าตั้งค่า' });
                 }
             },
 
-            // แก้ปัญหา Logout ช้า: Render หน้า Login ทันที
+            processLoginSuccess: function(userObj) {
+                state.isLoggedIn = true;
+                state.user = userObj;
+                sessionStorage.setItem('comms_logged_in', 'true');
+                sessionStorage.setItem('comms_user', JSON.stringify(state.user));
+                this.renderMainLayout();
+                this.startSessionTracking();
+                this.fetchData();
+                this.startAutoRefresh();
+                ui.toast(`ยินดีต้อนรับคุณ ${userObj.username}`, 'success');
+            },
+
             handleLogout: function(reason) {
                 state.isLoggedIn = false;
                 state.user = null;
                 sessionStorage.clear();
                 clearInterval(state.autoRefreshInterval);
                 this.stopSessionTracking();
-                
-                this.renderLoginScreen(); // เรนเดอร์หน้า Login ทันทีแบบไร้รอยต่อ
+                this.renderLoginScreen();
                 
                 if (reason === 'idle') {
                     setTimeout(() => ui.modal({ title: 'หมดเวลาเชื่อมต่อ', text: `ระบบได้ล็อกเอาต์อัตโนมัติเนื่องจากไม่มีการใช้งานเกิน ${state.sysConfig.idleMinutes} นาที เพื่อความปลอดภัย` }), 200);
                 }
-
-                this.fetchDataForLogin(); // โหลดข้อมูล Users เงียบๆ ในพื้นหลัง
             },
 
             startSessionTracking: function() {
@@ -260,12 +261,7 @@
 
             fetchData: async function(isBackground = false) {
                 if (!state.gasUrl) {
-                    if(state.devices.length === 0) {
-                        state.devices = fallbackData.devices;
-                        state.employees = fallbackData.employees;
-                        state.transactions = fallbackData.transactions;
-                        state.users = fallbackData.users;
-                    }
+                    if(state.devices.length === 0) { state.devices = fallbackData.devices; state.employees = fallbackData.employees; state.transactions = fallbackData.transactions; }
                     this.updateStatus('Local Mode', 'amber');
                     if(!isBackground) this.renderCurrentView();
                     return;
@@ -278,13 +274,26 @@
                     if (data.devices) state.devices = data.devices;
                     if (data.employees) state.employees = data.employees;
                     if (data.transactions) state.transactions = data.transactions;
-                    if (data.users) state.users = data.users;
+                    // Users จะไม่ถูกดึงตรงนี้แล้ว เพื่อความปลอดภัย
                     this.updateStatus('Online', 'emerald');
                 } catch (error) {
                     this.updateStatus('Offline', 'rose');
                 } finally {
                     if(!isBackground && state.currentView !== 'settings') this.renderCurrentView();
                 }
+            },
+
+            // ดึงรายชื่อผู้ใช้เฉพาะเมื่อ Admin เปิดหน้าตั้งค่า
+            fetchUsersForAdmin: async function() {
+                if (!state.gasUrl || state.user?.role !== 'ผู้ดูแลระบบ') return;
+                try {
+                    const res = await fetch(state.gasUrl, { method: 'POST', body: JSON.stringify({ action: 'getUsers' }), headers: { 'Content-Type': 'text/plain;charset=utf-8' }});
+                    const data = await res.json();
+                    if(data.success) {
+                        state.users = data.users;
+                        if(state.currentView === 'settings') this.renderCurrentView();
+                    }
+                } catch (e) {}
             },
 
             syncData: async function(payload, successMsg) {
@@ -351,6 +360,10 @@
             switchView: function(viewId) {
                 state.currentView = viewId;
                 this.renderNavigation();
+                
+                if (viewId === 'settings') {
+                    this.fetchUsersForAdmin(); // ดึงข้อมูล User เมื่อเข้าหน้า Settings
+                }
                 
                 const titles = {
                     'dashboard': { title: 'ภาพรวมระบบ', sub: 'ศูนย์ควบคุมและเฝ้าติดตามสถานะอุปกรณ์เรียลไทม์' },
@@ -632,7 +645,7 @@
             
             app.updateDocumentTitle();
             app.startSessionTracking(); 
-            app.renderMainLayout(); // Re-render to reflect new names/logo globally
+            app.renderMainLayout(); 
             ui.toast('บันทึกการตั้งค่าระบบเรียบร้อย', 'success');
         }
 
