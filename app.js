@@ -56,7 +56,7 @@ const ui = {
 };
 
 // ==========================================
-// 1. STATE & MOCK DATA
+// 1. STATE & DATA CONFIG
 // ==========================================
 const state = {
     isLoggedIn: sessionStorage.getItem('comms_logged_in') === 'true',
@@ -65,20 +65,14 @@ const state = {
     isMobileMenuOpen: false,
     theme: localStorage.getItem('comms_theme') || 'dark',
     
-    // ⚠️ ใส่ URL ของ Google Apps Script ของคุณที่นี่ (ฝังไว้แบบถาวร)
-    gasUrl: 'https://script.google.com/macros/s/AKfycbyN3YR8k_hQUc_JxxlST_bL_VXx5OlgVON5oDTJh878igAvCzvjmb4q7ekAIlLDVOeu/exec',
+    // ⚠️ นำ URL จาก Apps Script (New Deployment) มาใส่ในช่องด้านล่างนี้
+    gasUrl: 'https://script.google.com/macros/s/AKfycbyU9tiY99-UTEIkGlcMM85tyZaV2TbwQtnd2pX54y8YdIhBo8clI6tqZn4-GUzc5Urd/exec', 
     
     sysConfig: JSON.parse(localStorage.getItem('comms_sysconfig')) || { appName: 'CommsControl', shortName: 'Comms.', logoUrl: '', idleMinutes: 10 },
-    
     devices: [], employees: [], transactions: [], users: [],
     transForm: { type: 'borrow', selectedDevices: [] },
     userForm: { isEditing: false, oldUsername: '' },
     idleTimer: null, autoRefreshInterval: null
-};
-
-const fallbackData = {
-    devices: [], employees: [], transactions: [],
-    users: [{ username: 'admin', password: 'admin1234', role: 'ผู้ดูแลระบบ' }]
 };
 
 const navItems = [
@@ -118,12 +112,10 @@ const app = {
     handleLogin: async function(e) {
         e.preventDefault();
         const user = document.getElementById('login-user').value.trim();
-        const pass = document.getElementById('login-pass').value;
+        const pass = document.getElementById('login-pass').value.trim();
 
-        if (!state.gasUrl) {
-            const foundUser = fallbackData.users.find(u => u.username === user && u.password === pass);
-            if (foundUser) this.processLoginSuccess(foundUser);
-            else ui.modal({ title: 'เข้าสู่ระบบล้มเหลว', text: 'โหมด Local: ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง' });
+        if (!state.gasUrl || state.gasUrl === 'ใส่_URL_ของ_APPS_SCRIPT_ที่นี่') {
+            ui.modal({ title: 'เกิดข้อผิดพลาด', text: 'คุณยังไม่ได้ใส่ URL ของ Google Apps Script ในไฟล์ app.js ครับ' });
             return;
         }
 
@@ -142,7 +134,7 @@ const app = {
                 ui.modal({ title: 'เข้าสู่ระบบล้มเหลว', text: 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง' });
             }
         } catch (err) {
-            ui.modal({ title: 'ข้อผิดพลาดเครือข่าย', text: 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้ กรุณาตรวจสอบ URL ของ GAS' });
+            ui.modal({ title: 'ข้อผิดพลาดเครือข่าย', text: 'ไม่สามารถเชื่อมต่อระบบได้ ตรวจสอบว่าคุณ Deploy ใหม่เป็น "ทุกคน (Anyone)" หรือยัง' });
         }
     },
 
@@ -191,12 +183,7 @@ const app = {
     },
 
     fetchData: async function(isBackground = false) {
-        if (!state.gasUrl) {
-            if(state.devices.length === 0) { state.devices = fallbackData.devices; state.employees = fallbackData.employees; state.transactions = fallbackData.transactions; }
-            this.updateStatus('Local Mode', 'amber');
-            if(!isBackground) this.renderCurrentView();
-            return;
-        }
+        if (!state.gasUrl || state.gasUrl === 'ใส่_URL_ของ_APPS_SCRIPT_ที่นี่') return;
         
         if(!isBackground) this.updateStatus('Loading...', 'spin');
         try {
@@ -228,10 +215,7 @@ const app = {
     syncData: async function(payload, successMsg) {
         this.renderCurrentView(); 
         
-        if (!state.gasUrl) {
-            ui.toast('ทำงานในโหมด Offline (Local)', 'info');
-            return;
-        }
+        if (!state.gasUrl) return ui.toast('ทำงานในโหมด Offline', 'info');
 
         ui.toast('กำลังซิงค์ข้อมูลขึ้นคลาวด์...', 'sync');
         this.updateStatus('Syncing...', 'spin');
@@ -247,7 +231,7 @@ const app = {
             }
         } catch (error) {
             this.updateStatus('Error', 'rose');
-            ui.modal({ title: 'ข้อผิดพลาดการซิงค์', text: 'ไม่สามารถบันทึกข้อมูลขึ้น Google Sheets ได้ ข้อมูลจะถูกเก็บไว้ชั่วคราวในเครื่อง' });
+            ui.modal({ title: 'ข้อผิดพลาดการซิงค์', text: 'ไม่สามารถบันทึกข้อมูลขึ้น Google Sheets ได้' });
         }
     },
 
@@ -588,7 +572,7 @@ function saveAppConfig(e) {
 function submitSystemUser(e) {
     e.preventDefault();
     const user = document.getElementById('sys-username').value.trim();
-    const pass = document.getElementById('sys-password').value;
+    const pass = document.getElementById('sys-password').value.trim();
     const role = document.getElementById('sys-role').value;
 
     if (state.userForm.isEditing) {
