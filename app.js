@@ -66,7 +66,7 @@ const state = {
     theme: localStorage.getItem('comms_theme') || 'dark',
     
     // ⚠️ ใส่ URL ของ Google Apps Script ของคุณที่นี่ (ฝังไว้แบบถาวร)
-    gasUrl: 'https://script.google.com/macros/s/AKfycby6wCmAagEsxAs9-wCyRSENO47DCsG-jOkTDwyk76nk4de23aSQJDcrSD6ckKpEwipm/exec',
+    gasUrl: 'https://script.google.com/macros/s/AKfycbyN3YR8k_hQUc_JxxlST_bL_VXx5OlgVON5oDTJh878igAvCzvjmb4q7ekAIlLDVOeu/exec',
     
     sysConfig: JSON.parse(localStorage.getItem('comms_sysconfig')) || { appName: 'CommsControl', shortName: 'Comms.', logoUrl: '', idleMinutes: 10 },
     
